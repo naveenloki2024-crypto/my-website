@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login | RARE HABIT</title>
+    <link rel="stylesheet" href="/admin/css/admin.css">
+</head>
+<body class="login-page">
+
+    <div class="login-brand">
+        <div class="login-brand-mark">RH</div>
+        <div>
+            <div class="login-brand-name">RARE HABIT</div>
+            <div class="login-brand-sub">Admin Panel</div>
+        </div>
+    </div>
+
+    <div class="login-card">
+        <h1>Welcome back</h1>
+        <p class="login-sub">Sign in to access the store dashboard.</p>
+
+        <div id="loginError" class="alert alert-error" role="alert"></div>
+
+        <form id="loginForm" novalidate>
+            <div class="form-field">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="admin@rarehabit.com" autocomplete="email" required autofocus>
+            </div>
+
+            <div class="form-field">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+            </div>
+
+            <button type="submit" id="loginBtn" class="btn btn-yellow btn-block">
+                <span id="loginBtnText">Sign In</span>
+                <span id="loginSpinner" class="spinner hidden"></span>
+            </button>
+        </form>
+    </div>
+
+    <div class="login-footer">RARE HABIT &middot; Streetwear Admin</div>
+
+    <script src="/admin/js/admin.js"></script>
+</body>
+</html>

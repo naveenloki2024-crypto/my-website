@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="RARE HABIT. - View your orders and track their status.">
+    <title>RARE HABIT | My Orders</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/orders.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css">
+</head>
+<body class="products-page">
+
+    <!-- ==================== HEADER ==================== -->
+    <header class="header" id="header">
+        <a href="index.html" class="logo">RARE HABIT</a>
+        <nav class="main-nav" id="main-nav">
+            <a href="index.html#hero">Home</a>
+            <a href="index.html#new-release">New Arrival</a>
+            <a href="products.html">Shop</a>
+            <a href="orders.html" class="active">Orders</a>
+            <a href="index.html#banner">Sale</a>
+            <a href="index.html#instagram">Accessories</a>
+        </nav>
+        <div class="nav-right">
+            <i class="ri-search-line search-icon" id="search-icon"></i>
+            <div class="cart-icon" id="cart-icon">
+                <i class="ri-shopping-bag-line"></i>
+                <span id="cart-count">0</span>
+            </div>
+            <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ==================== ORDERS ==================== -->
+    <section class="new-release products-page-section" id="orders">
+        <div class="section-header">
+            <h2 class="section-title">MY ORDERS</h2>
+            <p class="section-subtitle">View and track the status of your orders</p>
+        </div>
+
+        <div class="oc-shell">
+            <div class="oc-toolbar">
+                <div>
+                    <div class="oc-toolbar-label">FIND YOUR ORDERS</div>
+                    <p class="oc-toolbar-hint">Orders are matched by the email address used at checkout.</p>
+                </div>
+                <form class="oc-toolbar-form" id="orders-form">
+                    <input type="email" id="orders-email" class="oc-input" placeholder="you@example.com" aria-label="Email used at checkout" autocomplete="email">
+                    <button type="submit" id="orders-fetch" class="oc-btn"><i class="ri-search-line"></i><span>VIEW MY ORDERS</span></button>
+                </form>
+            </div>
+
+            <div id="orders-container">
+                <div class="oc-state" id="orders-empty">
+                    <div class="oc-state-icon"><i class="ri-shopping-bag-3-line"></i></div>
+                    <h3 class="oc-state-title">Find your orders</h3>
+                    <p class="oc-state-text">Enter the email you used at checkout to view your orders and track delivery.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="logo">RARE HABIT</span>
+                <p>Bold urban streetwear for those who dare to express themselves. Premium quality, modern designs, and a style that speaks volumes.</p>
+            </div>
+            <div class="footer-links">
+                <h4>SHOP</h4>
+                <a href="products.html">All Products</a>
+                <a href="index.html#new-release">New Arrivals</a>
+                <a href="#">Best Sellers</a>
+                <a href="#">Hoodies</a>
+                <a href="#">Jackets</a>
+                <a href="#">Accessories</a>
+            </div>
+            <div class="footer-links">
+                <h4>HELP</h4>
+                <a href="#">Customer Service</a>
+                <a href="#">Shipping Info</a>
+                <a href="#">Returns</a>
+                <a href="#">Size Guide</a>
+                <a href="#">FAQ</a>
+            </div>
+            <div class="footer-links">
+                <h4>COMPANY</h4>
+                <a href="#">About Us</a>
+                <a href="#">Careers</a>
+                <a href="#">Sustainability</a>
+                <a href="#">Press</a>
+                <a href="#">Contact</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 RARE HABIT. All rights reserved.</p>
+            <div class="footer-socials">
+                <a href="#" aria-label="Instagram"><i class="ri-instagram-line"></i></a>
+                <a href="#" aria-label="Twitter"><i class="ri-twitter-x-line"></i></a>
+                <a href="#" aria-label="Facebook"><i class="ri-facebook-fill"></i></a>
+                <a href="#" aria-label="TikTok"><i class="ri-tiktok-line"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ==================== CART PANEL ==================== -->
+    <div class="cart-overlay" id="cart-overlay"></div>
+    <div class="cart-panel" id="cart-panel">
+        <div class="cart-header">
+            <h2>YOUR CART</h2>
+            <button class="cart-close" id="cart-close" aria-label="Close cart">
+                <i class="ri-close-line"></i>
+            </button>
+        </div>
+        <div class="cart-items" id="cart-items">
+            <div class="cart-empty" id="cart-empty">
+                <i class="ri-shopping-bag-line"></i>
+                <p>Your cart is empty</p>
+            </div>
+        </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total</span>
+                <span id="total-price">₹0</span>
+            </div>
+            <button class="checkout-btn" id="checkout-btn">CHECKOUT</button>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script src="js/orders.js"></script>
+</body>
+</html>

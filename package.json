@@ -1,0 +1,35 @@
+{
+  "name": "rare-habit",
+  "version": "1.0.0",
+  "description": "RARE HABIT - Express server for the streetwear e-commerce storefront",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "seed:admin": "node scripts/seed-admin.js",
+    "seed:products": "node scripts/seed-products.js"
+  },
+  "keywords": [
+    "express",
+    "ecommerce",
+    "streetwear"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/adapter-mariadb": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
+    "mariadb": "^3.5.4",
+    "mysql2": "^3.24.4",
+    "stripe": "^17.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9",
+    "prisma": "^7.10.0"
+  }
+}

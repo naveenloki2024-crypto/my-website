@@ -1,0 +1,997 @@
+/* ============================================
+   RARE HABIT. - My Orders / Order Details
+   Premium streetwear redesign (orders.html only)
+   Palette: deep navy/charcoal + white + subtle gold
+   ============================================ */
+
+.oc-shell {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 18px 20px;
+}
+
+/* ---------- Email lookup toolbar ---------- */
+
+.oc-toolbar {
+    background: var(--white);
+    border: 1px solid #ece8dd;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(20, 26, 38, 0.05);
+    padding: 22px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 18px;
+}
+
+.oc-toolbar-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.05rem;
+    letter-spacing: 2px;
+    color: #8a6720;
+    margin-bottom: 3px;
+}
+
+.oc-toolbar-hint {
+    font-size: 0.8rem;
+    color: #8a8f9c;
+}
+
+.oc-toolbar-form {
+    display: flex;
+    gap: 10px;
+}
+
+.oc-input {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    color: #1a2030;
+    background: #faf8f1;
+    border: 1.5px solid #e4dfd0;
+    border-radius: 12px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.oc-input:focus {
+    border-color: #c9a24b;
+    box-shadow: 0 0 0 3px rgba(201, 162, 75, 0.18);
+    background: #fff;
+}
+
+.oc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 12px;
+    background: #1a2030;
+    color: #f3d38a;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.25s ease, color 0.25s ease, transform 0.15s ease;
+}
+
+.oc-btn:hover {
+    background: #c9a24b;
+    color: #fff;
+}
+
+.oc-btn:active {
+    transform: translateY(1px);
+}
+
+.oc-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+/* ---------- Results bar ---------- */
+
+.oc-results {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 22px 2px 14px;
+}
+
+.oc-count {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 3px;
+    color: #8a6720;
+}
+
+.oc-fresh {
+    font-size: 0.78rem;
+    color: #9aa0ae;
+}
+
+/* ---------- Order cards ---------- */
+
+.oc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.oc-card {
+    position: relative;
+    background: var(--white);
+    border: 1px solid #ece8dd;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(20, 26, 38, 0.05);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.oc-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 18px 40px rgba(20, 26, 38, 0.11);
+}
+
+.oc-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #c9a24b, #e8ce8f 55%, #c9a24b);
+    opacity: 0.9;
+}
+
+.oc-card.cancelled::before {
+    background: linear-gradient(90deg, #cf4a45, #e59a96 55%, #cf4a45);
+}
+
+.oc-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 22px 16px;
+}
+
+.oc-thumbs {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.oc-thumb {
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 2px solid var(--white);
+    box-shadow: 0 3px 10px rgba(20, 26, 38, 0.16);
+    background: #f0ece0;
+}
+
+.oc-thumb + .oc-thumb {
+    margin-left: -14px;
+}
+
+.oc-thumb-more {
+    margin-left: -14px;
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    border: 2px solid var(--white);
+    background: #1a2030;
+    color: #f3d38a;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.oc-thumb-fallback {
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    background: #f0ece0;
+    color: #b7b09b;
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.oc-idbox {
+    min-width: 0;
+    flex: 1;
+}
+
+.oc-id {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.25rem;
+    letter-spacing: 1.5px;
+    color: #1a2030;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.oc-date {
+    font-size: 0.78rem;
+    color: #8a8f9c;
+    margin-top: 2px;
+}
+
+.oc-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+/* ---------- Status badges ---------- */
+
+.sb {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    padding: 6px 11px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.sb::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+.sb-ok { background: #e9f5ee; color: #1d7a4a; border-color: #cfe9dc; }
+.sb-wait { background: #fbf3e0; color: #97690f; border-color: #f0e0bb; }
+.sb-gold { background: #f8f0dc; color: #8a6720; border-color: #ecd9a8; }
+.sb-bad { background: #fdeceb; color: #b23b37; border-color: #f6d2d0; }
+.sb-dark { background: #262d3d; color: #c9d2e2; border-color: #39415a; }
+
+/* ---------- Card body ---------- */
+
+.oc-body {
+    padding: 0 22px 16px;
+    border-top: 1px solid #f1ede1;
+}
+
+.oc-prods {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 0 12px;
+}
+
+.oc-prod {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.88rem;
+}
+
+.oc-prod-name {
+    flex: 1;
+    min-width: 0;
+    color: #343a4a;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.oc-prod-qty {
+    color: #b3a983;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.oc-prod-price {
+    color: #1a2030;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.oc-more {
+    font-size: 0.8rem;
+    color: #8a6720;
+    font-weight: 500;
+}
+
+.oc-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-top: 1px solid #f1ede1;
+    padding: 12px 0 0;
+}
+
+.oc-ship {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #6b7280;
+    line-height: 1.45;
+}
+
+.oc-ship i {
+    color: #c9a24b;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.oc-ship span {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.oc-total {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.oc-total-label {
+    display: block;
+    font-size: 0.66rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #9aa0ae;
+}
+
+.oc-total-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.35rem;
+    letter-spacing: 1px;
+    color: #1a2030;
+}
+
+/* ---------- Track button ---------- */
+
+.oc-actions {
+    border-top: 1px solid #f1ede1;
+}
+
+.oc-btn-track {
+    width: 100%;
+    padding: 13px 20px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.05rem;
+    letter-spacing: 2.5px;
+    color: #1a2030;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.oc-btn-track .oc-track-icon {
+    font-size: 1.1rem;
+    color: #c9a24b;
+}
+
+.oc-btn-track .oc-chevron {
+    margin-left: auto;
+    transition: transform 0.3s ease;
+}
+
+.oc-card.open .oc-btn-track .oc-chevron {
+    transform: rotate(180deg);
+}
+
+.oc-btn-track:hover,
+.oc-card.open .oc-btn-track {
+    background: #1a2030;
+    color: #f3d38a;
+}
+
+.oc-btn-track:hover .oc-track-icon,
+.oc-card.open .oc-btn-track .oc-track-icon {
+    color: #f3d38a;
+}
+
+.oc-detail {
+    border-top: 1px dashed #e4dfd0;
+}
+
+.oc-detail[hidden] {
+    display: none;
+}
+
+/* ---------- States (empty / loading / error) ---------- */
+
+.oc-state {
+    margin-top: 20px;
+    background: var(--white);
+    border: 1px solid #ece8dd;
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(20, 26, 38, 0.05);
+    padding: 46px 24px;
+    text-align: center;
+}
+
+.oc-state-icon {
+    width: 66px;
+    height: 66px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: #f8f0dc;
+    color: #c9a24b;
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.oc-state-error .oc-state-icon {
+    background: #fdeceb;
+    color: #cf4a45;
+}
+
+.oc-state-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    letter-spacing: 2px;
+    color: #1a2030;
+    margin-bottom: 6px;
+}
+
+.oc-state-text {
+    max-width: 380px;
+    margin: 0 auto;
+    font-size: 0.88rem;
+    color: #8a8f9c;
+    line-height: 1.6;
+}
+
+/* Spinner for loading states */
+.oc-loader {
+    display: inline-block;
+    width: 26px;
+    height: 26px;
+    border: 3px solid #eee3c2;
+    border-top-color: #c9a24b;
+    border-radius: 50%;
+    margin-bottom: 12px;
+    animation: oc-spin 0.8s linear infinite;
+}
+
+@keyframes oc-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ---------- Detail panel (dark navy) ---------- */
+
+.od {
+    margin: 14px 22px 20px;
+    background: linear-gradient(180deg, #1b2231, #141a26);
+    border: 1px solid #2a3244;
+    border-radius: 16px;
+    padding: 20px;
+    color: #eef1f7;
+}
+
+.od-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #2a3244;
+}
+
+.od-hero-kicker {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.8rem;
+    letter-spacing: 3px;
+    color: #c9a24b;
+}
+
+.od-hero-id {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem;
+    letter-spacing: 2px;
+    color: #fff;
+    margin: 2px 0 4px;
+}
+
+.od-hero-meta {
+    font-size: 0.8rem;
+    color: #8b94a8;
+}
+
+.od-hero-meta strong {
+    color: #cfe3f0;
+    font-weight: 600;
+}
+
+.od-badges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.od-badges .sb { background: rgba(255, 255, 255, 0.05); border-color: #3a455c; }
+.od-badges .sb-ok { color: #7fd6a8; }
+.od-badges .sb-gold { color: #e3bb64; }
+.od-badges .sb-wait { color: #eccb6a; }
+.od-badges .sb-bad { color: #ef8a86; }
+.od-badges .sb-dark { color: #c9d2e2; }
+
+.od-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.od-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.od-card {
+    background: #1c2333;
+    border: 1px solid #2a3244;
+    border-radius: 14px;
+    padding: 16px;
+}
+
+.od-card-h {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.95rem;
+    letter-spacing: 2.5px;
+    color: #e3bb64;
+    margin-bottom: 12px;
+}
+
+.od-empty {
+    font-size: 0.85rem;
+    color: #6e7790;
+    font-style: italic;
+}
+
+/* ---------- Vertical timeline ---------- */
+
+.tl {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+}
+
+.tl-step {
+    position: relative;
+    display: flex;
+    gap: 14px;
+    padding: 4px 0 22px;
+}
+
+.tl-step:last-child {
+    padding-bottom: 6px;
+}
+
+.tl-node {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.tl-step.is-done .tl-node {
+    color: #e3bb64;
+}
+
+.tl-step.is-done .tl-node i,
+.tl-step.is-cancelled .tl-node i {
+    font-size: 26px;
+}
+
+.tl-step.is-current .tl-node {
+    border: 2px solid #e3bb64;
+    background: #202838;
+    box-shadow: 0 0 0 0 rgba(227, 185, 100, 0.42);
+    animation: tl-breathe 2s ease-in-out infinite;
+}
+
+.tl-step:not(.is-done):not(.is-current):not(.is-cancelled) .tl-node {
+    border: 2px solid #3c4559;
+    background: transparent;
+}
+
+.tl-step.is-cancelled .tl-node {
+    color: #ef8a86;
+}
+
+.tl-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #e3bb64;
+    display: block;
+}
+
+@keyframes tl-breathe {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(227, 185, 100, 0.42); }
+    50% { box-shadow: 0 0 0 8px rgba(227, 185, 100, 0); }
+}
+
+.tl-body {
+    display: flex;
+    flex-direction: column;
+    padding-top: 1px;
+    min-width: 0;
+}
+
+.tl-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.02rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.tl-step:not(.is-done):not(.is-current):not(.is-cancelled) .tl-label {
+    color: #6e7790;
+}
+
+.tl-step.is-done .tl-label {
+    color: #f3f6fb;
+}
+
+.tl-step.is-current .tl-label {
+    color: #e3bb64;
+}
+
+.tl-step.is-cancelled .tl-label {
+    color: #ef8a86;
+}
+
+.tl-time {
+    font-size: 0.74rem;
+    color: #7d869b;
+    margin-top: 2px;
+}
+
+.tl-step:not(.is-done):not(.is-current) .tl-time {
+    color: #565f76;
+}
+
+.tl-step::before {
+    content: '';
+    position: absolute;
+    left: 12px;
+    top: 34px;
+    bottom: -2px;
+    width: 2px;
+    background: #343d52;
+}
+
+.tl-step:last-child::before {
+    display: none;
+}
+
+.tl-step.is-done::before,
+.tl-step.is-current::before {
+    background: linear-gradient(180deg, #e3bb64, #b98a2f);
+}
+
+/* ---------- Cancelled banner ---------- */
+
+.od-cancel {
+    display: flex;
+    gap: 12px;
+    background: rgba(207, 74, 69, 0.12);
+    border: 1px solid rgba(239, 138, 134, 0.45);
+    border-radius: 14px;
+    padding: 14px 16px;
+}
+
+.od-cancel-icon {
+    font-size: 24px;
+    color: #ef8a86;
+    flex-shrink: 0;
+}
+
+.od-cancel-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.05rem;
+    letter-spacing: 3px;
+    color: #ffb3ae;
+}
+
+.od-cancel-reason-label {
+    font-size: 0.7rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #b06561;
+    margin-top: 4px;
+}
+
+.od-cancel-reason {
+    font-size: 0.9rem;
+    color: #f0d6d4;
+    margin-top: 2px;
+    line-height: 1.5;
+}
+
+/* ---------- Detail items / address / payment / messages ---------- */
+
+.od-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 0;
+}
+
+.od-item + .od-item {
+    border-top: 1px solid #242c3e;
+}
+
+.od-item-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: #0f1420;
+    flex-shrink: 0;
+}
+
+.od-item-thumb-fallback {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: #0f1420;
+    color: #565f76;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.od-item-mid {
+    flex: 1;
+    min-width: 0;
+}
+
+.od-item-name {
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: #eef1f7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.od-item-meta {
+    font-size: 0.74rem;
+    color: #8b94a8;
+    margin-top: 2px;
+}
+
+.od-item-price {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+}
+
+.od-totals {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #242c3e;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.od-total-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.84rem;
+}
+
+.od-total-row span:first-child {
+    color: #8b94a8;
+}
+
+.od-total-row span:last-child {
+    color: #eef1f7;
+}
+
+.od-total-row.total {
+    border-top: 1px solid #2a3244;
+    padding-top: 9px;
+    margin-top: 2px;
+}
+
+.od-total-row.total span {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.25rem;
+    letter-spacing: 1.5px;
+    color: #e3bb64;
+}
+
+.od-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.od-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.84rem;
+    line-height: 1.5;
+}
+
+.od-row i {
+    color: #c9a24b;
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+}
+
+.od-row-text {
+    flex: 1;
+    min-width: 0;
+    color: #cdd4e2;
+    word-break: break-word;
+}
+
+.od-row.sub .od-row-text {
+    font-weight: 600;
+    color: #fff;
+}
+
+.od-msg {
+    background: #171d2a;
+    border: 1px solid #262e41;
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+
+.od-msg.latest {
+    border-color: rgba(227, 185, 100, 0.5);
+}
+
+.od-msg + .od-msg {
+    margin-top: 10px;
+}
+
+.od-msg-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.od-msg-author {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 2px;
+    color: #e3bb64;
+}
+
+.od-msg-time {
+    font-size: 0.72rem;
+    color: #7d869b;
+}
+
+.od-msg-body {
+    font-size: 0.86rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #cdd4e2;
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+
+@media (max-width: 860px) {
+    .oc-toolbar {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        padding: 18px;
+    }
+
+    .oc-toolbar-form {
+        flex-direction: column;
+    }
+
+    .oc-btn {
+        width: 100%;
+    }
+
+    .od-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .oc-head {
+        flex-wrap: wrap;
+        padding: 16px 16px 12px;
+    }
+
+    .oc-thumb,
+    .oc-thumb-more {
+        width: 46px;
+        height: 46px;
+    }
+
+    .oc-badges {
+        width: 100%;
+        justify-content: flex-start;
+        padding-top: 2px;
+    }
+
+    .oc-body {
+        padding: 0 16px 12px;
+    }
+
+    .oc-foot {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .oc-total {
+        text-align: left;
+    }
+
+    .od {
+        margin: 12px 12px 16px;
+        padding: 16px;
+    }
+
+    .od-hero-id {
+        font-size: 1.3rem;
+    }
+}

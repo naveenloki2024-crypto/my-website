@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | RARE HABIT Admin</title>
+    <link rel="stylesheet" href="/admin/css/admin.css">
+</head>
+<body>
+
+    <div class="admin-shell">
+
+        <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-mark">RH</div>
+                <div>
+                    <div class="sidebar-brand-name">RARE HABIT</div>
+                    <div class="sidebar-brand-sub">Admin Panel</div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="/admin/dashboard.html" class="nav-item active">
+                    <span class="nav-icon">&#9632;</span> Dashboard
+                </a>
+                <a href="/admin/orders.html" class="nav-item">
+                    <span class="nav-icon">&#9776;</span> Orders
+                </a>
+                <a href="/admin/products.html" class="nav-item">
+                    <span class="nav-icon">&#9998;</span> Products
+                </a>
+            </nav>
+
+            <div class="sidebar-user">
+                <div class="sidebar-user-top">
+                    <div id="adminAvatar" class="sidebar-user-avatar">RH</div>
+                    <div class="sidebar-user-info">
+                        <div id="adminName" class="sidebar-user-name">Administrator</div>
+                        <div id="adminRole" class="sidebar-user-role">Admin</div>
+                    </div>
+                </div>
+                <button type="button" id="logoutBtn" class="btn btn-ghost" style="width:100%;color:#e7e7e2;border-color:rgba(255,255,255,.18);">
+                    Sign out
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1>Dashboard</h1>
+                    <div id="todayLabel" class="topbar-meta"></div>
+                </div>
+                <div class="topbar-actions">
+                    <button type="button" id="sidebarToggle" class="mobile-toggle" aria-label="Open menu">&#9776;</button>
+                    <button type="button" id="refreshBtn" class="btn btn-ghost">Refresh</button>
+                </div>
+            </header>
+
+            <div class="content">
+
+                <div id="pageState">
+
+                    <section id="statsGrid" class="stats-grid hidden">
+                        <div class="stat-card accent-dark">
+                            <div class="stat-label">Total Orders</div>
+                            <div id="statTotalOrders" class="stat-value">-</div>
+                            <div id="statTodayOrders" class="stat-sub">-</div>
+                        </div>
+
+                        <div class="stat-card accent-info">
+                            <div class="stat-label">Pending Orders</div>
+                            <div id="statPendingOrders" class="stat-value">-</div>
+                            <div class="stat-sub">Awaiting confirmation</div>
+                        </div>
+
+                        <div class="stat-card accent-yellow">
+                            <div class="stat-label">Confirmed Orders</div>
+                            <div id="statConfirmedOrders" class="stat-value">-</div>
+                            <div class="stat-sub">Confirmed to date</div>
+                        </div>
+
+                        <div class="stat-card accent-success">
+                            <div class="stat-label">Delivered Orders</div>
+                            <div id="statDeliveredOrders" class="stat-value">-</div>
+                            <div class="stat-sub">Completed deliveries</div>
+                        </div>
+
+                        <div class="stat-card accent-danger">
+                            <div class="stat-label">Total Revenue</div>
+                            <div id="statTotalRevenue" class="stat-value stat-value-revenue">-</div>
+                            <div id="statTodayRevenue" class="stat-sub">-</div>
+                        </div>
+                    </section>
+
+                    <section id="recentPanel" class="panel hidden">
+                        <div class="panel-header">
+                            <h2>Recent Orders</h2>
+                            <a href="/admin/orders.html" class="btn btn-ghost">View all</a>
+                        </div>
+                        <div class="panel-body">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Order</th>
+                                        <th>Customer</th>
+                                        <th>Status</th>
+                                        <th>Payment</th>
+                                        <th>Total</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentOrdersBody"></tbody>
+                            </table>
+                            <div id="recentEmpty" class="empty-state hidden">No orders yet.</div>
+                        </div>
+                    </section>
+
+                </div>
+
+                <div id="loadingState" class="page-loading">
+                    <div class="loading-ring"></div>
+                    Loading dashboard data...
+                </div>
+
+                <div id="errorState" class="page-error hidden">
+                    <div class="page-error-text" id="errorMessage">Something went wrong.</div>
+                    <button type="button" id="retryBtn" class="btn btn-ghost">Try again</button>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script src="/admin/js/admin.js"></script>
+</body>
+</html>

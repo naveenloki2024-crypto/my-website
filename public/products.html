@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="RARE HABIT. - All products. Explore the full RARE HABIT collection of hoodies, jackets, t-shirts, and more.">
+    <title>SANDRO. | All Products</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css">
+</head>
+<body class="products-page">
+
+    <!-- ==================== HEADER ==================== -->
+    <header class="header" id="header">
+        <a href="index.html" class="logo">RARE HABIT</a>
+        <nav class="main-nav" id="main-nav">
+            <a href="index.html#hero">Home</a>
+            <a href="index.html#new-release">New Arrival</a>
+            <a href="products.html" class="active">Shop</a>
+            <a href="orders.html">Orders</a>
+            <a href="index.html#banner">Sale</a>
+            <a href="index.html#instagram">Accessories</a>
+        </nav>
+        <div class="nav-right">
+            <i class="ri-search-line search-icon" id="search-icon"></i>
+            <div class="cart-icon" id="cart-icon">
+                <i class="ri-shopping-bag-line"></i>
+                <span id="cart-count">0</span>
+            </div>
+            <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ==================== ALL PRODUCTS ==================== -->
+    <section class="new-release products-page-section" id="all-products">
+        <div class="section-header">
+            <h2 class="section-title">ALL PRODUCTS</h2>
+            <p class="section-subtitle">The complete RARE HABIT streetwear collection</p>
+        </div>
+        <div class="products-grid" id="store-grid">
+            <!-- Products are loaded from the database by js/main.js -->
+        </div>
+        <div class="see-all-wrap">
+            <a href="index.html#new-release" class="see-all-btn"><span>&#8598;</span> BACK TO HOME</a>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="logo">RARE HABIT</span>
+                <p>Bold urban streetwear for those who dare to express themselves. Premium quality, modern designs, and a style that speaks volumes.</p>
+            </div>
+            <div class="footer-links">
+                <h4>SHOP</h4>
+                <a href="products.html">All Products</a>
+                <a href="index.html#new-release">New Arrivals</a>
+                <a href="#">Best Sellers</a>
+                <a href="#">Hoodies</a>
+                <a href="#">Jackets</a>
+                <a href="#">Accessories</a>
+            </div>
+            <div class="footer-links">
+                <h4>HELP</h4>
+                <a href="#">Customer Service</a>
+                <a href="#">Shipping Info</a>
+                <a href="#">Returns</a>
+                <a href="#">Size Guide</a>
+                <a href="#">FAQ</a>
+            </div>
+            <div class="footer-links">
+                <h4>COMPANY</h4>
+                <a href="#">About Us</a>
+                <a href="#">Careers</a>
+                <a href="#">Sustainability</a>
+                <a href="#">Press</a>
+                <a href="#">Contact</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 RARE HABIT. All rights reserved.</p>
+            <div class="footer-socials">
+                <a href="#" aria-label="Instagram"><i class="ri-instagram-line"></i></a>
+                <a href="#" aria-label="Twitter"><i class="ri-twitter-x-line"></i></a>
+                <a href="#" aria-label="Facebook"><i class="ri-facebook-fill"></i></a>
+                <a href="#" aria-label="TikTok"><i class="ri-tiktok-line"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ==================== CART PANEL ==================== -->
+    <div class="cart-overlay" id="cart-overlay"></div>
+    <div class="cart-panel" id="cart-panel">
+        <div class="cart-header">
+            <h2>YOUR CART</h2>
+            <button class="cart-close" id="cart-close" aria-label="Close cart">
+                <i class="ri-close-line"></i>
+            </button>
+        </div>
+        <div class="cart-items" id="cart-items">
+            <div class="cart-empty" id="cart-empty">
+                <i class="ri-shopping-bag-line"></i>
+                <p>Your cart is empty</p>
+            </div>
+        </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total</span>
+                <span id="total-price">₹0</span>
+            </div>
+            <button class="checkout-btn" id="checkout-btn">CHECKOUT</button>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="RARE HABIT. - Secure checkout. Confirm your delivery details and pay safely with Stripe.">
+    <title>RARE HABIT | Checkout</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/checkout.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css">
+</head>
+<body class="products-page">
+
+    <!-- ==================== HEADER ==================== -->
+    <header class="header" id="header">
+        <a href="index.html" class="logo">RARE HABIT</a>
+        <nav class="main-nav" id="main-nav">
+            <a href="index.html#hero">Home</a>
+            <a href="index.html#new-release">New Arrival</a>
+            <a href="products.html">Shop</a>
+            <a href="orders.html">Orders</a>
+            <a href="index.html#banner">Sale</a>
+            <a href="index.html#instagram">Accessories</a>
+        </nav>
+        <div class="nav-right">
+            <i class="ri-search-line search-icon" id="search-icon"></i>
+            <div class="cart-icon" id="cart-icon">
+                <i class="ri-shopping-bag-line"></i>
+                <span id="cart-count">0</span>
+            </div>
+            <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ==================== CHECKOUT ==================== -->
+    <section class="new-release products-page-section" id="checkout">
+        <div class="co-shell">
+
+            <div class="co-head">
+                <div>
+                    <div class="co-kicker">SECURE CHECKOUT</div>
+                    <h1 class="co-title">CHECKOUT</h1>
+                </div>
+                <a class="co-back" href="products.html"><i class="ri-arrow-left-line"></i> Continue shopping</a>
+            </div>
+
+            <!-- Empty cart -->
+            <div class="co-empty" id="co-empty" hidden>
+                <div class="co-empty-icon"><i class="ri-shopping-bag-3-line"></i></div>
+                <h3 class="co-empty-title">Your cart is empty</h3>
+                <p class="co-empty-text">Add something you love to the cart before checking out.</p>
+                <a class="co-btn co-btn-cta" href="products.html">SHOP THE COLLECTION</a>
+            </div>
+
+            <div class="co-grid" id="co-main" hidden>
+                <div class="co-left">
+
+                    <!-- ============ DELIVERY ADDRESS ============ -->
+                    <div class="co-card" id="co-address-card">
+                        <div class="co-card-head">
+                            <h2 class="co-card-title">DELIVERY ADDRESS</h2>
+                            <span class="co-step">STEP 1</span>
+                        </div>
+                        <div id="co-address-body"></div>
+                    </div>
+
+                    <!-- ============ PAYMENT METHOD ============ -->
+                    <div class="co-card" id="co-pay-card">
+                        <div class="co-card-head">
+                            <h2 class="co-card-title">PAYMENT METHOD</h2>
+                            <span class="co-step">STEP 2</span>
+                        </div>
+
+                        <div class="co-pay-option">
+                            <span class="co-radio"><i class="ri-check-line"></i></span>
+                            <span class="co-pay-icon"><i class="ri-bank-card-line"></i></span>
+                            <div class="co-pay-copy">
+                                <div class="co-pay-title">Stripe Secure Payment</div>
+                                <div class="co-pay-sub">Pay securely using Stripe. Card details are handled by Stripe, never on this site.</div>
+                            </div>
+                        </div>
+
+                        <div class="co-alert" id="co-pay-alert" role="alert" hidden></div>
+
+                        <button type="button" class="co-btn co-btn-cta" id="co-pay-btn" disabled>
+                            <i class="ri-lock-2-line"></i>
+                            <span>PROCEED TO PAYMENT</span>
+                        </button>
+                        <p class="co-pay-note">
+                            <i class="ri-secure-payment-line"></i>
+                            You will be redirected to Stripe's secure checkout to complete your payment.
+                        </p>
+                    </div>
+
+                </div>
+
+                <!-- ============ ORDER SUMMARY ============ -->
+                <div class="co-right">
+                    <div class="co-card co-summary">
+                        <div class="co-card-head">
+                            <h2 class="co-card-title">ORDER SUMMARY</h2>
+                        </div>
+
+                        <div id="co-summary-items"></div>
+
+                        <div class="co-sum-rows">
+                            <div class="co-sum-row"><span>Subtotal</span><span id="co-subtotal">₹0</span></div>
+                            <div class="co-sum-row"><span>Shipping</span><span class="co-free">Free</span></div>
+                        </div>
+
+                        <div class="co-sum-total">
+                            <span>TOTAL</span>
+                            <span id="co-total">₹0</span>
+                        </div>
+
+                        <div class="co-lock">
+                            <i class="ri-lock-2-line"></i> Payments are secured by Stripe
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="logo">RARE HABIT</span>
+                <p>Bold urban streetwear for those who dare to express themselves. Premium quality, modern designs, and a style that speaks volumes.</p>
+            </div>
+            <div class="footer-links">
+                <h4>SHOP</h4>
+                <a href="products.html">All Products</a>
+                <a href="index.html#new-release">New Arrivals</a>
+                <a href="#">Best Sellers</a>
+                <a href="#">Hoodies</a>
+                <a href="#">Jackets</a>
+                <a href="#">Accessories</a>
+            </div>
+            <div class="footer-links">
+                <h4>HELP</h4>
+                <a href="#">Customer Service</a>
+                <a href="#">Shipping Info</a>
+                <a href="#">Returns</a>
+                <a href="#">Size Guide</a>
+                <a href="#">FAQ</a>
+            </div>
+            <div class="footer-links">
+                <h4>COMPANY</h4>
+                <a href="#">About Us</a>
+                <a href="#">Careers</a>
+                <a href="#">Sustainability</a>
+                <a href="#">Press</a>
+                <a href="#">Contact</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 RARE HABIT. All rights reserved.</p>
+            <div class="footer-socials">
+                <a href="#" aria-label="Instagram"><i class="ri-instagram-line"></i></a>
+                <a href="#" aria-label="Twitter"><i class="ri-twitter-x-line"></i></a>
+                <a href="#" aria-label="Facebook"><i class="ri-facebook-fill"></i></a>
+                <a href="#" aria-label="TikTok"><i class="ri-tiktok-line"></i></a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ==================== CART PANEL ==================== -->
+    <div class="cart-overlay" id="cart-overlay"></div>
+    <div class="cart-panel" id="cart-panel">
+        <div class="cart-header">
+            <h2>YOUR CART</h2>
+            <button class="cart-close" id="cart-close" aria-label="Close cart">
+                <i class="ri-close-line"></i>
+            </button>
+        </div>
+        <div class="cart-items" id="cart-items">
+            <div class="cart-empty" id="cart-empty">
+                <i class="ri-shopping-bag-line"></i>
+                <p>Your cart is empty</p>
+            </div>
+        </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total</span>
+                <span id="total-price">₹0</span>
+            </div>
+            <button class="checkout-btn" id="checkout-btn">CHECKOUT</button>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script src="js/checkout.js"></script>
+</body>
+</html>

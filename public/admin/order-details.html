@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Details | RARE HABIT Admin</title>
+    <link rel="stylesheet" href="/admin/css/admin.css">
+</head>
+<body>
+
+    <div class="admin-shell">
+
+        <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-mark">RH</div>
+                <div>
+                    <div class="sidebar-brand-name">RARE HABIT</div>
+                    <div class="sidebar-brand-sub">Admin Panel</div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="/admin/dashboard.html" class="nav-item">
+                    <span class="nav-icon">&#9632;</span> Dashboard
+                </a>
+                <a href="/admin/orders.html" class="nav-item active">
+                    <span class="nav-icon">&#9776;</span> Orders
+                </a>
+                <a href="/admin/products.html" class="nav-item">
+                    <span class="nav-icon">&#9998;</span> Products
+                </a>
+            </nav>
+
+            <div class="sidebar-user">
+                <div class="sidebar-user-top">
+                    <div id="adminAvatar" class="sidebar-user-avatar">RH</div>
+                    <div class="sidebar-user-info">
+                        <div id="adminName" class="sidebar-user-name">Administrator</div>
+                        <div id="adminRole" class="sidebar-user-role">Admin</div>
+                    </div>
+                </div>
+                <button type="button" id="logoutBtn" class="btn btn-ghost" style="width:100%;color:#e7e7e2;border-color:rgba(255,255,255,.18);">
+                    Sign out
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div>
+                    <h1 id="orderTitle">Order</h1>
+                    <div id="orderMeta" class="topbar-meta"></div>
+                </div>
+                <div class="topbar-actions">
+                    <button type="button" id="sidebarToggle" class="mobile-toggle" aria-label="Open menu">&#9776;</button>
+                    <a href="/admin/orders.html" class="btn btn-ghost">&larr; Back to orders</a>
+                    <button type="button" id="refreshBtn" class="btn btn-ghost">Refresh</button>
+                </div>
+            </header>
+
+            <div class="content">
+
+                <div id="detailsLoading" class="page-loading">
+                    <div class="loading-ring"></div>
+                    Loading order details...
+                </div>
+
+                <div id="detailsError" class="page-error hidden">
+                    <div class="page-error-text" id="detailsErrorMessage">Something went wrong.</div>
+                    <button type="button" id="detailsRetry" class="btn btn-ghost">Try again</button>
+                </div>
+
+                <div id="detailsRoot" class="hidden">
+
+                    <div class="detail-grid">
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <h2>Order Status</h2>
+                                <span id="detailStatusBadge" class="badge"></span>
+                            </div>
+                            <div class="panel-body-detail">
+                                <label class="field-label" for="statusSelect">Update status</label>
+                                <select id="statusSelect" class="select"></select>
+
+                                <div id="cancelReasonWrap" class="hidden">
+                                    <label class="field-label" for="cancelReason">Cancellation reason (required)</label>
+                                    <textarea id="cancelReason" class="textarea" rows="3" placeholder="Why is this order being cancelled?"></textarea>
+                                </div>
+
+                                <div id="statusAlert" class="alert alert-error hidden"></div>
+
+                                <button type="button" id="statusUpdateBtn" class="btn btn-yellow btn-block">Update Status</button>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <h2>Status History</h2>
+                            </div>
+                            <div class="panel-body-detail">
+                                <div id="statusHistoryList" class="history-list">
+                                    <div class="empty-state">No status changes recorded yet.</div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <h2>Customer</h2>
+                            </div>
+                            <div class="panel-body-detail">
+                                <div id="customerInfo" class="info-list"></div>
+                                <label class="field-label" style="margin-top:18px;" for="deliveryAddress">Delivery Address</label>
+                                <div id="deliveryAddress" class="address-block"></div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <h2>Items</h2>
+                            </div>
+                            <div class="panel-body">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Qty</th>
+                                            <th>Unit</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="itemsBody"></tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <td colspan="3" class="table-total-label">Subtotal</td>
+                                            <td id="subtotalCell" class="table-total"></td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="3" class="table-total-label">Shipping</td>
+                                            <td id="shippingCell" class="table-total"></td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="3" class="table-total-label">Total</td>
+                                            <td id="grandTotalCell" class="table-total"></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <div class="panel-body-detail">
+                                <label class="field-label">Payment</label>
+                                <div id="paymentInfo" class="info-list"></div>
+                            </div>
+                        </section>
+
+                        <section class="panel">
+                            <div class="panel-header">
+                                <h2>Messages to Customer</h2>
+                            </div>
+                            <div class="panel-body-detail">
+                                <div id="messageThread" class="msg-thread">
+                                    <div class="empty-state">No messages sent yet.</div>
+                                </div>
+                                <textarea id="messageInput" class="textarea" rows="3" placeholder='e.g. "Your order has been shipped and will arrive soon."'></textarea>
+                                <div id="messageAlert" class="alert alert-error hidden"></div>
+                                <button type="button" id="sendMessageBtn" class="btn btn-primary btn-block">Send Message</button>
+                            </div>
+                        </section>
+
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script src="/admin/js/admin.js"></script>
+</body>
+</html>
