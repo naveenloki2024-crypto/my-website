@@ -7,7 +7,8 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "seed:admin": "node scripts/seed-admin.js",
-    "seed:products": "node scripts/seed-products.js"
+    "seed:products": "node scripts/seed-products.js",
+    "postinstall": "prisma generate"
   },
   "keywords": [
     "express",
