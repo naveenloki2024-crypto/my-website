@@ -8,7 +8,8 @@
     "dev": "nodemon app.js",
     "seed:admin": "node scripts/seed-admin.js",
     "seed:products": "node scripts/seed-products.js",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma generate"
   },
   "keywords": [
     "express",

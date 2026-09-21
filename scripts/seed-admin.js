@@ -4,6 +4,27 @@ require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const prisma = require('../config/prisma');
 
+const ADMIN_TABLE_SQL = `CREATE TABLE IF NOT EXISTS \`Admin\` (
+    \`id\` VARCHAR(191) NOT NULL,
+    \`email\` VARCHAR(191) NOT NULL,
+    \`name\` VARCHAR(191) NULL,
+    \`passwordHash\` VARCHAR(191) NOT NULL,
+    \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    \`updatedAt\` DATETIME(3) NOT NULL,
+
+    UNIQUE INDEX \`Admin_email_key\`(\`email\`),
+    PRIMARY KEY (\`id\`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`;
+
+async function ensureAdminTable() {
+    try {
+        await prisma.$executeRawUnsafe(ADMIN_TABLE_SQL);
+    } catch (error) {
+        console.warn('Could not auto-create Admin table (DDL may be restricted).');
+        console.warn('If this fails, run: npx prisma migrate deploy');
+    }
+}
+
 async function main() {
     const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
     const password = process.env.ADMIN_PASSWORD || '';
@@ -20,6 +41,8 @@ async function main() {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+
+    await ensureAdminTable();
 
     const admin = await prisma.admin.upsert({
         where: { email },
