@@ -13,10 +13,11 @@
      node scripts/seed-products.js
    ============================================ */
 
-require('dotenv').config();
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const fs = require('fs');
-const prisma = require('../config/prisma');
+const { connectDB, disconnectDB } = require('../config/db');
+const { Product } = require('../models');
 
 const IMAGES_DIR = path.join(__dirname, '..', 'public', 'images');
 
@@ -140,8 +141,9 @@ function imageExists(imagePath) {
 }
 
 async function main() {
-    const existing = await prisma.product.findMany({ select: { id: true, slug: true } });
-    const existingBySlug = new Map(existing.map(p => [p.slug, p.id]));
+    await connectDB();
+    const existing = await Product.find({}, { slug: 1 }).lean();
+    const existingBySlug = new Map(existing.map(p => [p.slug, p._id.toString()]));
 
     let inserted = 0;
     let updated = 0;
@@ -168,7 +170,7 @@ async function main() {
 
         if (existingBySlug.has(slug)) {
             const id = existingBySlug.get(slug);
-            const current = await prisma.product.findUnique({ where: { id } });
+            const current = await Product.findById(id).lean();
 
             const same =
                 current &&
@@ -182,11 +184,11 @@ async function main() {
             if (same) {
                 skipped += 1;
             } else {
-                await prisma.product.update({ where: { id }, data });
+                await Product.updateOne({ _id: id }, { $set: data });
                 updated += 1;
             }
         } else {
-            await prisma.product.create({ data });
+            await Product.create(data);
             inserted += 1;
         }
     }
@@ -210,6 +212,4 @@ main()
         console.error('Could not seed products:', error.message);
         process.exit(1);
     })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+    .finally(() => disconnectDB());

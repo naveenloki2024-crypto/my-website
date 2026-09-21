@@ -6,7 +6,19 @@
 (function () {
     // NOTE: this IIFE keeps its own constants so it cannot collide with the
     // top-level `API_BASE_URL` declared by main.js in the same page.
-    const API_ORIGIN = 'http://127.0.0.1:3000';
+    // Same-origin relative /api calls on the RARE HABIT server (localhost:3000
+    // in development, the Vercel domain in production); fall back to the local
+    // Express origin only when served from another local origin (Live Server).
+    function resolveApiOrigin() {
+        const host = window.location.hostname;
+        const port = window.location.port;
+        const isLocalHost = host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
+        if (isLocalHost && port && port !== '3000') {
+            return 'http://127.0.0.1:3000';
+        }
+        return '';
+    }
+    const API_ORIGIN = resolveApiOrigin();
 
     const CART_KEY = 'sandro-cart';
     const EMAIL_KEY = 'sandro-email';
@@ -329,7 +341,8 @@
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Could not save your address.');
+                const detail = data.detail ? ' - ' + data.detail : '';
+                throw new Error((data.error || 'Could not save your address.') + detail);
             }
 
             localStorage.setItem(EMAIL_KEY, values.email);
@@ -341,10 +354,11 @@
             setPayEnabled(true);
             showAlert(payAlert, 'ok', '✓ Address saved. Review your order and proceed to payment.');
         } catch (error) {
+            console.error('[Checkout] Could not save the address:', error);
             formError.textContent = (error && error.message) || 'Could not save your address. Check the server and try again.';
             formError.hidden = false;
             saveBtn.disabled = false;
-            saveBtn.querySelector('span').textContent = isEditing ? 'SAVE CHANGES' : 'SAVE ADDRESS &amp; CONTINUE';
+            saveBtn.querySelector('span').textContent = isEditing ? 'SAVE CHANGES' : 'SAVE ADDRESS & CONTINUE';
         }
     }
 
@@ -418,6 +432,11 @@
 
         items.forEach(ci => {
             const stock = ci.id ? stockById[ci.id] : undefined;
+
+            if (ci.id && stock === undefined) {
+                messages.push(`"${ci.name}" is no longer available. Remove it from your cart to continue.`);
+                return;
+            }
             if (stock === undefined) return;
 
             if (stock <= 0) {
@@ -487,7 +506,9 @@
             }
 
             if (!response.ok) {
-                throw new Error(data.error || 'Could not start the payment.');
+                const reason = data.error || data.message || 'Could not start the payment.';
+                const detail = data.detail ? ' (' + data.detail + ')' : '';
+                throw new Error(reason + detail);
             }
 
             if (!data.url) {

@@ -6,7 +6,19 @@
    ============================================ */
 
 (function () {
-    const API_BASE_URL = 'http://127.0.0.1:3000';
+    // Same-origin relative /api calls on the RARE HABIT server (localhost:3000
+    // in development, the Vercel domain in production); fall back to the local
+    // Express origin only when served from another local origin (Live Server).
+    function resolveApiOrigin() {
+        const host = window.location.hostname;
+        const port = window.location.port;
+        const isLocalHost = host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
+        if (isLocalHost && port && port !== '3000') {
+            return 'http://127.0.0.1:3000';
+        }
+        return '';
+    }
+    const API_BASE_URL = resolveApiOrigin();
 
     const emailInput = document.getElementById('orders-email');
     const fetchBtn = document.getElementById('orders-fetch');

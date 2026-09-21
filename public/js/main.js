@@ -287,9 +287,23 @@ cartOverlay.addEventListener('click', closeCart);
 
 // ==================== STRIPE CHECKOUT ====================
 
-// Express/Stripe API origin. The frontend may be served from a different
-// origin (e.g. VS Code Live Server on 5501), so always call the API explicitly.
-const API_BASE_URL = 'http://127.0.0.1:3000';
+// Express/Stripe API origin. When the page is served by the RARE HABIT server
+// itself (localhost:3000 in development, or the Vercel domain in production)
+// the API lives on the same origin, so relative /api calls are used. The
+// explicit local URL is only kept so a page served from another local origin
+// (e.g. VS Code Live Server on 5501) can still reach the locally running
+// Express server.
+function resolveApiOrigin() {
+    const host = window.location.hostname;
+    const port = window.location.port;
+    const isLocalHost = host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
+    if (isLocalHost && port && port !== '3000') {
+        return 'http://127.0.0.1:3000';
+    }
+    return '';
+}
+
+const API_BASE_URL = resolveApiOrigin();
 
 // ==================== PRODUCTS FROM DATABASE ====================
 

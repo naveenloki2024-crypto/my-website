@@ -54,7 +54,7 @@
             if (response.ok && data.success) {
                 setSuccess(data);
             } else {
-                setNotConfirmed(data.message || 'Payment not confirmed by Stripe.');
+                setNotConfirmed(data.message || data.error || 'Payment not confirmed by Stripe.');
             }
         } catch (error) {
             setNotConfirmed('Could not reach the server to confirm your payment. Make sure the backend is running.');

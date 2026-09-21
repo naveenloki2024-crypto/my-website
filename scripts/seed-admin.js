@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const bcrypt = require('bcryptjs');
-const prisma = require('../config/prisma');
+const { connectDB, disconnectDB } = require('../config/db');
+const { Admin } = require('../models');
 
 async function main() {
     const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
@@ -21,11 +23,12 @@ async function main() {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const admin = await prisma.admin.upsert({
-        where: { email },
-        update: { name, passwordHash },
-        create: { email, name, passwordHash }
-    });
+    await connectDB();
+    const admin = await Admin.findOneAndUpdate(
+        { email },
+        { $set: { name, passwordHash } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     console.log(`Admin ready: ${admin.email} (name: ${admin.name})`);
 
@@ -39,6 +42,4 @@ main()
         console.error('Could not seed admin:', error.message);
         process.exit(1);
     })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+    .finally(() => disconnectDB());

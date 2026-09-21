@@ -1,22 +1,32 @@
-require('dotenv').config();
+const path = require('path');
+// Load .env from the project root regardless of the current working directory.
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
-const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const Stripe = require('stripe');
-const db = require('./config/db');
-const prisma = require('./config/prisma');
+const { connectDB, mongoose, safeErrorText } = require('./config/db');
+const {
+    Product,
+    User,
+    Admin,
+    Order,
+    ALLOWED_ORDER_STATUS,
+    ALLOWED_PAYMENT_STATUS
+} = require('./models');
 const adminAuth = require('./config/adminAuth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-const ALLOWED_ORDER_STATUS = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
-const ALLOWED_PAYMENT_STATUS = ['UNPAID', 'PAID', 'REFUNDED', 'FAILED'];
+// Trust Vercel's reverse proxy so req.protocol/host resolve to the public
+// https URL (needed for Stripe success/cancel URLs and secure cookies).
+app.set('trust proxy', 1);
+
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 function parsePriceToCents(priceStr) {
     const amount = parseFloat(String(priceStr).replace(/[^0-9.]/g, ''));
@@ -36,17 +46,39 @@ function slugify(value) {
         .slice(0, 191);
 }
 
+function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function toObjectIdOrNull(value) {
+    if (!value) return null;
+    try {
+        if (mongoose.isValidObjectId(String(value))) {
+            return new mongoose.Types.ObjectId(String(value));
+        }
+    } catch (e) {
+        return null;
+    }
+    return null;
+}
+
+function toIdString(value) {
+    if (!value) return null;
+    return typeof value.toString === 'function' ? value.toString() : String(value);
+}
+
 async function resolveProductIds(ids) {
     const candidateIds = Array.from(new Set((ids || []).filter(Boolean))).slice(0, 100);
 
     if (!candidateIds.length) return {};
 
-    const found = await prisma.product.findMany({
-        where: { id: { in: candidateIds } },
-        select: { id: true }
-    });
+    const objectIds = candidateIds.map(toObjectIdOrNull).filter(Boolean);
 
-    const valid = new Set(found.map(p => p.id));
+    const found = objectIds.length
+        ? await Product.find({ _id: { $in: objectIds } }).select('_id')
+        : [];
+
+    const valid = new Set(found.map(p => p._id.toString()));
     const result = {};
 
     candidateIds.forEach(id => {
@@ -58,10 +90,7 @@ async function resolveProductIds(ids) {
 
 async function uniqueProductSlug(baseName) {
     const base = slugify(baseName);
-    const existing = await prisma.product.findMany({
-        where: { slug: { startsWith: base } },
-        select: { slug: true }
-    });
+    const existing = await Product.find({ slug: { $regex: `^${escapeRegExp(base)}` } }).select('slug');
 
     const taken = new Set(existing.map(p => p.slug));
 
@@ -192,18 +221,42 @@ function normalizeSavedAddress(input) {
     return address;
 }
 
-function handleDbError(res, error, message) {
-    console.error(`[DB] ${message}`, error.message);
+function isDbUnreachableError(error) {
+    if (!error) return false;
+    const name = String(error.name || '');
+    const text = String(error.message || '');
+    return name === 'MongoServerSelectionError' ||
+        name === 'MongooseServerSelectionError' ||
+        name === 'MongooseError' ||
+        text.includes('Could not connect to any servers') ||
+        text.includes('ECONNREFUSED') ||
+        text.includes('IP whitelist') ||
+        text.includes('Authentication failed');
+}
 
-    if (error && error.code === 'P2002') {
+function handleDbError(res, error, message) {
+    console.error(`[DB] ${message}`, safeErrorText(error));
+
+    if (isDbUnreachableError(error)) {
+        return res.status(503).json({
+            error: 'The database is currently unreachable. Check MONGODB_URI and make sure this server\'s IP is allowed in MongoDB Atlas Network Access, then try again.',
+            detail: safeErrorText(error)
+        });
+    }
+
+    if (error && error.code === 11000) {
         return res.status(409).json({ error: 'A record with this value already exists.' });
     }
 
-    if (error && ['P2003', 'P2025'].includes(error.code)) {
+    if (error && error.name === 'CastError') {
         return res.status(404).json({ error: 'Related record not found.' });
     }
 
-    res.status(500).json({ error: message });
+    if (error && error.name === 'ValidationError') {
+        return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).json({ error: message, detail: safeErrorText(error) });
 }
 
 function throwHttp(status, message) {
@@ -221,7 +274,7 @@ async function applyOrderStatusUpdate(orderId, body, adminId) {
         throwHttp(400, 'Provide at least one of status or paymentStatus.');
     }
 
-    const existing = await prisma.order.findUnique({ where: { id: orderId } });
+    const existing = await Order.findById(toObjectIdOrNull(orderId));
 
     if (!existing) {
         throwHttp(404, 'Order not found.');
@@ -252,10 +305,10 @@ async function applyOrderStatusUpdate(orderId, body, adminId) {
 
         if (newStatus !== existing.status) {
             history = {
-                orderId: existing.id,
+                orderId: existing._id,
                 oldStatus: existing.status,
                 newStatus,
-                adminId: adminId || null,
+                adminId: toObjectIdOrNull(adminId),
                 note: newStatus === 'CANCELLED' ? reason : null
             };
         }
@@ -271,19 +324,17 @@ async function applyOrderStatusUpdate(orderId, body, adminId) {
         data.paymentStatus = newPaymentStatus;
     }
 
-    const order = await prisma.$transaction(async (tx) => {
-        if (history) {
-            await tx.orderStatusHistory.create({ data: history });
-        }
+    if (history) {
+        existing.statusHistory.push(history);
+    }
 
-        return tx.order.update({
-            where: { id: existing.id },
-            data,
-            include: { items: true }
-        });
+    Object.keys(data).forEach(key => {
+        existing[key] = data[key];
     });
 
-    return order;
+    await existing.save();
+
+    return existing;
 }
 
 function handleStatusError(res, error) {
@@ -334,7 +385,7 @@ function stockShortageMessage(detail) {
  * product, or out-of-stock). Returns null when everything validates.
  *
  * NOTE: this is a pre-flight check. The authoritative, race-safe enforcement
- * happens inside a transaction with conditional atomic decrements.
+ * happens with conditional atomic decrements (see decrementStockForItems).
  */
 async function validateRequestedStock(items) {
     const lines = (items || []).map(item => ({
@@ -344,14 +395,12 @@ async function validateRequestedStock(items) {
     }));
 
     const distinctIds = Array.from(new Set(lines.filter(l => l.id).map(l => String(l.id)))).slice(0, 100);
+    const objectIds = distinctIds.map(toObjectIdOrNull).filter(Boolean);
     const stockById = {};
 
-    if (distinctIds.length) {
-        const rows = await prisma.product.findMany({
-            where: { id: { in: distinctIds } },
-            select: { id: true, name: true, stock: true }
-        });
-        rows.forEach(p => { stockById[p.id] = p; });
+    if (objectIds.length) {
+        const rows = await Product.find({ _id: { $in: objectIds } }).select('name stock');
+        rows.forEach(p => { stockById[p._id.toString()] = p; });
     }
 
     const errors = [];
@@ -359,7 +408,7 @@ async function validateRequestedStock(items) {
     for (const line of lines) {
         if (!line.id) continue;
 
-        const product = stockById[line.id];
+        const product = stockById[String(line.id)];
         if (!product) {
             errors.push({
                 productId: line.id,
@@ -414,37 +463,48 @@ class StockShortageError extends Error {
 
 /**
  * Atomic per-product stock reduction, safe under concurrency.
- * updateMany with `stock: { gte: qty }` is an atomic conditional decrement:
- * it cannot push a product below zero and it serializes concurrent buyers so
- * the last remaining unit is never oversold. Called inside a transaction.
+ * findOneAndUpdate with `stock: { $gte: qty }` is an atomic conditional
+ * decrement: it cannot push a product below zero and it serializes concurrent
+ * buyers so the last remaining unit is never oversold.
+ *
+ * If any item cannot be decremented, the already-applied decrements are
+ * compensated (restored) before throwing, keeping the whole batch all-or-nothing.
  */
-async function decrementStockForItems(tx, items) {
+async function decrementStockForItems(items) {
     const shortages = [];
+    const applied = [];
 
     for (const item of items) {
         if (!item || !item.productId) continue;
         const qty = Number(item.quantity && item.quantity >= 1 ? item.quantity : (item.qty || 1));
+        const productId = toObjectIdOrNull(item.productId);
+        if (!productId) continue;
 
-        const result = await tx.product.updateMany({
-            where: { id: item.productId, stock: { gte: qty } },
-            data: { stock: { decrement: qty } }
-        });
+        const result = await Product.findOneAndUpdate(
+            { _id: productId, stock: { $gte: qty } },
+            { $inc: { stock: -qty } },
+            { new: true }
+        );
 
-        if (result.count === 0) {
-            const product = await tx.product.findUnique({
-                where: { id: item.productId },
-                select: { id: true, name: true, stock: true }
-            });
+        if (!result) {
+            const product = await Product.findById(productId).select('name stock');
             shortages.push({
-                productId: item.productId,
+                productId: toIdString(productId),
                 name: (product && product.name) || item.name || 'Item',
                 requested: qty,
                 availableStock: (product && product.stock) || 0
             });
+        } else {
+            applied.push({ productId, qty });
         }
     }
 
-    if (shortages.length) throw new StockShortageError(shortages);
+    if (shortages.length) {
+        for (const a of applied) {
+            await Product.updateOne({ _id: a.productId }, { $inc: { stock: a.qty } });
+        }
+        throw new StockShortageError(shortages);
+    }
 }
 
 function sendStockError(res, payload) {
@@ -478,99 +538,93 @@ async function finalizeStripeOrder(session) {
             console.warn(`${logPrefix} could not expand line_items: ${error.message}`);
         }
 
-        const result = await prisma.$transaction(async (tx) => {
-            const existing = await tx.order.findUnique({
-                where: { stripeSessionId: session.id },
-                include: { items: true }
-            });
+        const existing = await Order.findOne({ stripeSessionId: session.id });
 
-            const collectedShipping = session.shipping_details
-                ? stripeAddressToJson(session.shipping_details)
-                : null;
+        const collectedShipping = session.shipping_details
+            ? stripeAddressToJson(session.shipping_details)
+            : null;
 
-            const finalizedFields = {
-                status: 'CONFIRMED',
-                paymentStatus: 'PAID',
-                totalAmount: session.amount_total || null,
-                shippingFee: (session.shipping_cost && session.shipping_cost.amount_total) || 0,
-                currency: (session.currency || 'INR').toUpperCase(),
-                stripePaymentIntent: session.payment_intent || null,
-                customerName: (session.customer_details && session.customer_details.name) || (existing && existing.customerName) || null,
-                customerEmail: (session.customer_details && session.customer_details.email) || (existing && existing.customerEmail) || null,
-                customerPhone: (session.customer_details && session.customer_details.phone) || (existing && existing.customerPhone) || null,
-                shippingAddress: collectedShipping || (existing && existing.shippingAddress) || null
-            };
+        const finalizedFields = {
+            status: 'CONFIRMED',
+            paymentStatus: 'PAID',
+            totalAmount: session.amount_total || null,
+            shippingFee: (session.shipping_cost && session.shipping_cost.amount_total) || 0,
+            currency: (session.currency || 'INR').toUpperCase(),
+            stripePaymentIntent: session.payment_intent || null,
+            customerName: (session.customer_details && session.customer_details.name) || (existing && existing.customerName) || null,
+            customerEmail: (session.customer_details && session.customer_details.email) || (existing && existing.customerEmail) || null,
+            customerPhone: (session.customer_details && session.customer_details.phone) || (existing && existing.customerPhone) || null,
+            shippingAddress: collectedShipping || (existing && existing.shippingAddress) || null
+        };
 
-            if (existing && existing.items && existing.items.length) {
-                // Claim the order atomically: only one transaction may flip the
-                // draft from UNPAID -> PAID, which makes concurrent webhook +
-                // verify-payment calls safe. Stock is decremented only by the
-                // transaction that wins the claim.
-                const claimed = await tx.order.updateMany({
-                    where: {
-                        id: existing.id,
-                        status: { not: 'CONFIRMED' },
-                        paymentStatus: { not: 'PAID' }
-                    },
-                    data: { status: 'CONFIRMED', paymentStatus: 'PAID' }
-                });
+        if (existing && existing.items && existing.items.length) {
+            // Claim the order atomically: only one request may flip the draft
+            // from UNPAID -> PAID, which makes concurrent webhook +
+            // verify-payment calls safe. Stock is decremented only by the
+            // caller that wins the claim.
+            const claimResult = await Order.findOneAndUpdate(
+                {
+                    _id: existing._id,
+                    status: { $ne: 'CONFIRMED' },
+                    paymentStatus: { $ne: 'PAID' }
+                },
+                { $set: { status: 'CONFIRMED', paymentStatus: 'PAID' } },
+                { new: false }
+            );
 
-                if (claimed.count === 0) {
-                    const current = await tx.order.findUnique({
-                        where: { id: existing.id },
-                        include: { items: true }
-                    });
-                    console.log(`${logPrefix} already finalized by another request (order ${existing.id}); stocked quantities untouched.`);
-                    return { order: current, skipped: true };
+            if (!claimResult) {
+                const current = await Order.findById(existing._id);
+                console.log(`${logPrefix} already finalized by another request (order ${existing._id}); stocked quantities untouched.`);
+                return { order: current, skipped: true };
+            }
+
+            try {
+                await decrementStockForItems(existing.items);
+            } catch (shortageError) {
+                if (shortageError instanceof StockShortageError) {
+                    // Restore the claim that was just made so the order stays
+                    // a draft, exactly as the old rolled-back transaction did.
+                    await Order.updateOne(
+                        { _id: existing._id },
+                        { $set: { status: existing.status || 'PENDING', paymentStatus: existing.paymentStatus || 'UNPAID' } }
+                    );
+                    const detail = shortageError.details[0];
+                    console.warn(
+                        `${logPrefix} OUT OF STOCK: ${detail.name} has only ${detail.availableStock} ` +
+                        `available (requested ${detail.requested}). Order was NOT confirmed.`
+                    );
+                    return {
+                        error: 'OUT_OF_STOCK',
+                        message: stockShortageMessage(detail),
+                        availableStock: detail.availableStock,
+                        details: shortageError.details
+                    };
                 }
-
-                await decrementStockForItems(tx, existing.items);
+                throw shortageError;
             }
-
-            let order;
-
-            if (existing) {
-                order = await tx.order.update({
-                    where: { id: existing.id },
-                    data: finalizedFields,
-                    include: { items: true }
-                });
-            } else {
-                order = await tx.order.create({
-                    data: {
-                        ...finalizedFields,
-                        orderNumber: generateOrderNumber(),
-                        stripeSessionId: session.id,
-                        items: { create: lineItems }
-                    },
-                    include: { items: true }
-                });
-            }
-
-            console.log(
-                `${logPrefix} saved: ${order.id} | status=${order.status} | ` +
-                `payment_status=${order.paymentStatus} | total=${order.totalAmount} ${order.currency}`
-            );
-
-            return { order };
-        });
-
-        return result;
-    } catch (error) {
-        if (error instanceof StockShortageError) {
-            const detail = error.details[0];
-            console.warn(
-                `${logPrefix} OUT OF STOCK: ${detail.name} has only ${detail.availableStock} ` +
-                `available (requested ${detail.requested}). Order was NOT confirmed.`
-            );
-            return {
-                error: 'OUT_OF_STOCK',
-                message: stockShortageMessage(detail),
-                availableStock: detail.availableStock,
-                details: error.details
-            };
         }
 
+        let order;
+
+        if (existing) {
+            order = await Order.findByIdAndUpdate(existing._id, { $set: finalizedFields }, { new: true });
+        } else {
+            order = await Order.create({
+                ...finalizedFields,
+                orderNumber: generateOrderNumber(),
+                stripeSessionId: session.id,
+                items: lineItems
+            });
+        }
+
+        console.log(
+            `${logPrefix} saved: ${order._id} | status=${order.status} | ` +
+            `payment_status=${order.paymentStatus} | total=${order.totalAmount} ${order.currency}`
+        );
+
+        const fresh = await Order.findById(order._id);
+        return { order: fresh };
+    } catch (error) {
         console.error(`${logPrefix} failed to finalize order:`, error.message);
         return null;
     }
@@ -655,20 +709,39 @@ app.post('/api/create-checkout-session', async (req, res) => {
             return res.status(400).json(outOfStock);
         }
 
-        const lineItems = items.map(item => {
+        // Build Stripe line items. Each item is validated up front so a bad
+        // cart entry (zero/null price, bad quantity) fails with a clear 400
+        // instead of a silent Stripe rejection that ends up as a generic 500.
+        const lineItems = [];
+        for (const item of items) {
             const unitAmount = parsePriceToCents(item.price);
+            const qty = Number(item.qty);
 
-            return {
+            if (!Number.isInteger(unitAmount) || unitAmount <= 0) {
+                return res.status(400).json({
+                    error: `"${item && item.name ? item.name : 'One item'}" has an invalid price, so payment cannot start.`,
+                    detail: `Received price: ${JSON.stringify(item && item.price)}. Clear the cart and re-add the item, then try again.`
+                });
+            }
+
+            if (!Number.isInteger(qty) || qty < 1) {
+                return res.status(400).json({
+                    error: `"${item && item.name ? item.name : 'One item'}" has an invalid quantity, so payment cannot start.`,
+                    detail: `Received quantity: ${JSON.stringify(item && item.qty)}. Clear the cart and re-add the item, then try again.`
+                });
+            }
+
+            lineItems.push({
                 price_data: {
                     currency: 'inr',
                     unit_amount: unitAmount,
                     product_data: {
-                        name: item.name
+                        name: String(item.name || 'Item').slice(0, 127)
                     }
                 },
-                quantity: item.qty
-            };
-        });
+                quantity: qty
+            });
+        }
 
         // Prefill the Stripe checkout shipping form with the customer's saved
         // address (if provided). Failures here are non-fatal.
@@ -731,48 +804,53 @@ app.post('/api/create-checkout-session', async (req, res) => {
         const validProductIdMap = await resolveProductIds(items.map(item => item.id));
 
         try {
-            const draft = await prisma.order.upsert({
-                where: { stripeSessionId: session.id },
-                update: {
-                    customerEmail: customerEmail || null,
-                    customerName: customerName || null,
-                    customerPhone: customerPhone || null,
-                    shippingAddress: customerAddress,
-                    userId: req.body.userId || null,
-                    totalAmount
-                },
-                create: {
-                    orderNumber: generateOrderNumber(),
-                    stripeSessionId: session.id,
-                    userId: req.body.userId || null,
-                    customerEmail: customerEmail || null,
-                    customerName: customerName || null,
-                    customerPhone: customerPhone || null,
-                    shippingAddress: customerAddress,
-                    currency: 'INR',
-                    totalAmount,
-                    status: 'PENDING',
-                    paymentStatus: 'UNPAID',
-                    items: {
-                        create: items.map(item => ({
+            const draft = await Order.findOneAndUpdate(
+                { stripeSessionId: session.id },
+                {
+                    $set: {
+                        customerEmail: customerEmail || null,
+                        customerName: customerName || null,
+                        customerPhone: customerPhone || null,
+                        shippingAddress: customerAddress,
+                        userId: toObjectIdOrNull(req.body.userId),
+                        totalAmount
+                    },
+                    $setOnInsert: {
+                        orderNumber: generateOrderNumber(),
+                        currency: 'INR',
+                        status: 'PENDING',
+                        paymentStatus: 'UNPAID',
+                        items: items.map(item => ({
                             name: item.name,
                             price: parsePriceToCents(item.price),
                             quantity: item.qty,
                             image: item.image || null,
-                            productId: validProductIdMap[item.id]
+                            productId: toObjectIdOrNull(validProductIdMap[item.id])
                         }))
                     }
-                }
-            });
-            console.log(`[DB] Draft order saved for session ${session.id}: ${draft.id}`);
+                },
+                { upsert: true, new: true }
+            );
+            console.log(`[DB] Draft order saved for session ${session.id}: ${draft._id}`);
         } catch (error) {
             console.error(`[DB] Could not save draft order for session ${session.id}:`, error.message);
         }
 
         res.json({ id: session.id, url: session.url });
     } catch (error) {
-        console.error('Stripe checkout error:', error.message);
-        res.status(500).json({ error: 'Could not create checkout session.' });
+        console.error('Stripe checkout error:', safeErrorText(error));
+
+        if (isDbUnreachableError(error)) {
+            return res.status(503).json({
+                error: 'The database is unreachable, so stock and order data could not be validated. Check MONGODB_URI and the MongoDB Atlas IP whitelist, then try again.',
+                detail: safeErrorText(error)
+            });
+        }
+
+        res.status(500).json({
+            error: 'Could not create checkout session. Please check the server logs and Stripe test configuration.',
+            detail: safeErrorText(error)
+        });
     }
 });
 
@@ -807,6 +885,8 @@ app.get('/api/verify-payment', async (req, res) => {
             return res.json({
                 success: true,
                 message: 'Payment confirmed.',
+                order_saved: !!finalized,
+                warning: finalized ? undefined : 'Payment was confirmed by Stripe, but the order could not be saved to the database right now. Check the server logs.',
                 session_id: session.id,
                 payment_status: session.payment_status,
                 status: session.status,
@@ -831,22 +911,64 @@ app.get('/api/verify-payment', async (req, res) => {
     }
 });
 
-app.get('/api/db-test', async (req, res) => {
+// Stripe sandbox sanity check. Returns success only when the configured keys
+// are TEST-MODE keys (sk_test_ / pk_test_) AND the Stripe API is reachable.
+app.get('/api/stripe-test', async (req, res) => {
+    const secretKey = process.env.STRIPE_SECRET_KEY || '';
+    const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
+
+    if (!secretKey) {
+        return res.status(500).json({ success: false, error: 'STRIPE_SECRET_KEY is missing from the environment.' });
+    }
+    if (!secretKey.startsWith('sk_test_')) {
+        return res.status(500).json({
+            success: false,
+            error: `STRIPE_SECRET_KEY is not a test key (starts with "${secretKey.slice(0, 12)}..."). Use an sk_test_ key for sandbox mode.`
+        });
+    }
+    if (!publishableKey.startsWith('pk_test_')) {
+        return res.status(500).json({
+            success: false,
+            error: `STRIPE_PUBLISHABLE_KEY is not a test key (starts with "${publishableKey.slice(0, 12)}..."). Use a pk_test_ key for sandbox mode.`
+        });
+    }
+
     try {
-        const connection = await db.getConnection();
-        const [rows] = await connection.query('SELECT NOW() AS now');
-        connection.release();
+        await stripe.balance.retrieve();
+        res.json({ success: true, stripe: 'test mode' });
+    } catch (error) {
+        console.error('[Stripe] /api/stripe-test failed:', error.message);
+        res.status(500).json({ success: false, error: 'Stripe API call failed.', detail: error.message });
+    }
+});
+
+// Simple health check. Returns { "mongodb": "connected" } only when the
+// database connection is live (verified with a real ping).
+app.get('/api/health', async (req, res) => {
+    try {
+        const connection = await connectDB();
+        await connection.db.admin().command({ ping: 1 });
+        res.json({ mongodb: 'connected' });
+    } catch (error) {
+        console.error(`[MongoDB] /api/health failed: ${safeErrorText(error)}`);
+        res.status(503).json({ mongodb: 'disconnected' });
+    }
+});
+
+app.get('/api/health/db', async (req, res) => {
+    try {
+        const connection = await connectDB();
+        await connection.db.admin().command({ ping: 1 });
         res.json({
             success: true,
-            message: 'MySQL connection is working.',
-            time: rows[0] && rows[0].now
+            message: 'MongoDB connection is working'
         });
     } catch (error) {
-        console.error('MySQL connection test failed:', error.message);
+        console.error(`[MongoDB] connection test failed: ${safeErrorText(error)}`);
         res.status(500).json({
             success: false,
-            message: 'MySQL connection failed.',
-            error: error.message
+            message: 'MongoDB connection failed.',
+            error: safeErrorText(error)
         });
     }
 });
@@ -868,42 +990,35 @@ app.post('/api/orders', async (req, res) => {
 
         const validProductIdMap = await resolveProductIds(items.map(item => item.id));
 
-        const order = await prisma.$transaction(async (tx) => {
-            const stockItems = items.map(item => ({
-                productId: validProductIdMap[item.id],
+        const stockItems = items.map(item => ({
+            productId: validProductIdMap[item.id],
+            quantity: item.quantity || 1,
+            name: item.name
+        }));
+
+        await decrementStockForItems(stockItems);
+
+        const order = await Order.create({
+            orderNumber: generateOrderNumber(),
+            userId: toObjectIdOrNull(userId),
+            customerEmail: customerEmail || null,
+            customerName: customerName || null,
+            customerPhone: customerPhone || null,
+            shippingAddress: shippingAddress || null,
+            currency: 'INR',
+            totalAmount: items.reduce(
+                (sum, item) => sum + (parsePriceToCents(item.price) * (item.quantity || 1)),
+                0
+            ),
+            status: 'PENDING',
+            paymentStatus: 'UNPAID',
+            items: items.map(item => ({
+                name: item.name,
+                price: parsePriceToCents(item.price),
                 quantity: item.quantity || 1,
-                name: item.name
-            }));
-
-            await decrementStockForItems(tx, stockItems);
-
-            return tx.order.create({
-                data: {
-                    orderNumber: generateOrderNumber(),
-                    userId: userId || null,
-                    customerEmail: customerEmail || null,
-                    customerName: customerName || null,
-                    customerPhone: customerPhone || null,
-                    shippingAddress: shippingAddress || null,
-                    currency: 'INR',
-                    totalAmount: items.reduce(
-                        (sum, item) => sum + (parsePriceToCents(item.price) * (item.quantity || 1)),
-                        0
-                    ),
-                    status: 'PENDING',
-                    paymentStatus: 'UNPAID',
-                    items: {
-                        create: items.map(item => ({
-                            name: item.name,
-                            price: parsePriceToCents(item.price),
-                            quantity: item.quantity || 1,
-                            image: item.image || null,
-                            productId: validProductIdMap[item.id]
-                        }))
-                    }
-                },
-                include: { items: true }
-            });
+                image: item.image || null,
+                productId: toObjectIdOrNull(validProductIdMap[item.id])
+            }))
         });
 
         res.status(201).json(order);
@@ -926,20 +1041,16 @@ app.get('/api/orders', async (req, res) => {
         const { userId, email, status } = req.query;
         const where = {};
 
-        if (userId) where.userId = userId;
+        if (userId) where.userId = toObjectIdOrNull(userId);
         if (email) where.customerEmail = email;
         if (status) where.status = status;
 
-        const orders = await prisma.order.findMany({
-            where,
-            include: {
-                items: true,
-                user: { select: { id: true, name: true, email: true } }
-            },
-            orderBy: { createdAt: 'desc' }
-        });
+        const orders = await Order.find(where)
+            .populate('userId', 'id name email')
+            .sort({ createdAt: 'desc' })
+            .lean();
 
-        res.json(orders);
+        res.json(orders.map(orderToJSON));
     } catch (error) {
         handleDbError(res, error, 'Could not fetch orders.');
     }
@@ -947,16 +1058,14 @@ app.get('/api/orders', async (req, res) => {
 
 app.get('/api/orders/user/:userId', async (req, res) => {
     try {
-        const orders = await prisma.order.findMany({
-            where: { userId: req.params.userId },
-            include: {
-                items: true,
-                user: { select: { id: true, name: true, email: true } }
-            },
-            orderBy: { createdAt: 'desc' }
-        });
+        const userId = toObjectIdOrNull(req.params.userId);
 
-        res.json(orders);
+        const orders = await Order.find({ userId: userId || null })
+            .populate('userId', 'id name email')
+            .sort({ createdAt: 'desc' })
+            .lean();
+
+        res.json(orders.map(orderToJSON));
     } catch (error) {
         handleDbError(res, error, 'Could not fetch user orders.');
     }
@@ -970,17 +1079,9 @@ app.get('/api/orders/:id/timeline', async (req, res) => {
             return res.status(400).json({ error: 'Email is required to view order tracking.' });
         }
 
-        const order = await prisma.order.findUnique({
-            where: { id: req.params.id },
-            include: {
-                items: true,
-                statusHistory: { orderBy: { createdAt: 'asc' } },
-                messages: {
-                    orderBy: { createdAt: 'asc' },
-                    include: { admin: { select: { id: true, name: true } } }
-                }
-            }
-        });
+        const order = await Order.findById(toObjectIdOrNull(req.params.id))
+            .populate('messages.adminId', 'id name email')
+            .lean();
 
         if (!order) {
             return res.status(404).json({ error: 'Order not found.' });
@@ -992,9 +1093,11 @@ app.get('/api/orders/:id/timeline', async (req, res) => {
             return res.status(403).json({ error: 'This order does not belong to the given email.' });
         }
 
+        const messages = (order.messages || []).map(messageToJSON);
+
         res.json({
             order: {
-                id: order.id,
+                id: order._id.toString(),
                 orderNumber: order.orderNumber,
                 status: order.status,
                 paymentStatus: order.paymentStatus,
@@ -1010,10 +1113,10 @@ app.get('/api/orders/:id/timeline', async (req, res) => {
                 createdAt: order.createdAt,
                 updatedAt: order.updatedAt
             },
-            items: order.items,
-            statusHistory: order.statusHistory,
-            messages: order.messages,
-            latestMessage: order.messages.length ? order.messages[order.messages.length - 1] : null
+            items: (order.items || []).map(itemToJSON),
+            statusHistory: (order.statusHistory || []).map(statusHistoryToJSON),
+            messages,
+            latestMessage: messages.length ? messages[messages.length - 1] : null
         });
     } catch (error) {
         handleDbError(res, error, 'Could not load order tracking.');
@@ -1022,19 +1125,15 @@ app.get('/api/orders/:id/timeline', async (req, res) => {
 
 app.get('/api/orders/:id', async (req, res) => {
     try {
-        const order = await prisma.order.findUnique({
-            where: { id: req.params.id },
-            include: {
-                items: true,
-                user: { select: { id: true, name: true, email: true } }
-            }
-        });
+        const order = await Order.findById(toObjectIdOrNull(req.params.id))
+            .populate('userId', 'id name email')
+            .lean();
 
         if (!order) {
             return res.status(404).json({ error: 'Order not found.' });
         }
 
-        res.json(order);
+        res.json(orderToJSON(order));
     } catch (error) {
         handleDbError(res, error, 'Could not fetch order.');
     }
@@ -1049,55 +1148,122 @@ app.patch('/api/orders/:id/status', adminAuth.requireAdmin, async (req, res) => 
     }
 });
 
-// ======================= PRODUCTS API (CUSTOMER-FACING) =======================
+// ======================= SERIALIZERS (MongoDB -> API JSON) =======================
 
-app.get('/api/products', async (req, res) => {
-    try {
-        const { category, search, limit } = req.query;
-        const where = {};
+function sortByCreatedAtAsc(arr) {
+    return (arr || []).slice().sort((a, b) => {
+        const ta = a && a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b && b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return ta - tb;
+    });
+}
 
-        if (category && String(category).trim()) {
-            where.category = String(category).trim();
-        }
+function itemToJSON(item) {
+    if (!item || typeof item !== 'object') return null;
 
-        if (search && String(search).trim()) {
-            const term = String(search).trim();
-            where.OR = [
-                { name: { contains: term, mode: 'insensitive' } },
-                { description: { contains: term, mode: 'insensitive' } },
-                { category: { contains: term, mode: 'insensitive' } }
-            ];
-        }
+    const productRef = (typeof item.productId === 'object' && item.productId !== null)
+        ? item.productId
+        : item.productId;
 
-        const parsedLimit = parseInt(limit, 10);
+    return {
+        id: toIdString(item._id || item.id),
+        productId: toIdString(productRef && typeof productRef === 'object' ? (productRef._id || productRef) : productRef),
+        name: item.name || null,
+        price: item.price || 0,
+        quantity: item.quantity || 0,
+        image: item.image || null
+    };
+}
 
-        const products = await prisma.product.findMany({
-            where,
-            orderBy: [{ createdAt: 'asc' }, { name: 'asc' }],
-            take: Number.isInteger(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : undefined
-        });
+function statusHistoryToJSON(entry) {
+    if (!entry || typeof entry !== 'object') return null;
 
-        res.json({ products });
-    } catch (error) {
-        handleDbError(res, error, 'Could not fetch products.');
+    const adminRef = entry.admin || entry.adminId;
+
+    return {
+        id: toIdString(entry._id || entry.id),
+        oldStatus: entry.oldStatus || null,
+        newStatus: entry.newStatus || null,
+        adminId: (adminRef && typeof adminRef === 'object')
+            ? toIdString(adminRef._id || adminRef)
+            : toIdString(adminRef),
+        note: entry.note || null,
+        createdAt: entry.createdAt || null
+    };
+}
+
+function messageToJSON(msg) {
+    if (!msg || typeof msg !== 'object') return null;
+
+    const rawAdmin = msg.admin;
+    const populated = rawAdmin && typeof rawAdmin === 'object';
+
+    const id = toIdString(msg._id || msg.id);
+    let adminId = null;
+
+    if (populated) {
+        adminId = toIdString(rawAdmin._id || rawAdmin);
+    } else {
+        adminId = toIdString(rawAdmin);
     }
-});
 
-app.get('/api/products/:id', async (req, res) => {
-    try {
-        const product = await prisma.product.findFirst({
-            where: { OR: [{ id: req.params.id }, { slug: req.params.id }] }
-        });
+    const admin = populated
+        ? { id: adminId, name: rawAdmin.name || null, email: rawAdmin.email || null }
+        : null;
 
-        if (!product) {
-            return res.status(404).json({ error: 'Product not found.' });
-        }
+    return {
+        id,
+        adminId,
+        message: msg.message || null,
+        createdAt: msg.createdAt || null,
+        admin
+    };
+}
 
-        res.json({ product });
-    } catch (error) {
-        handleDbError(res, error, 'Could not fetch product.');
-    }
-});
+function userToJSON(user) {
+    if (!user || typeof user !== 'object') return null;
+    return {
+        id: toIdString(user._id || user.id),
+        name: user.name || null,
+        email: user.email || null
+    };
+}
+
+function orderToJSON(order) {
+    if (!order || typeof order !== 'object') return null;
+
+    const populatedUser = (typeof order.user === 'object' && order.user !== null)
+        ? order.user
+        : (typeof order.userId === 'object' && order.userId !== null ? order.userId : null);
+
+    const userId = (typeof order.userId === 'object' && order.userId !== null)
+        ? toIdString(order.userId._id || order.userId)
+        : toIdString(order.userId);
+
+    return {
+        id: toIdString(order._id || order.id),
+        orderNumber: order.orderNumber || null,
+        userId,
+        user: userToJSON(populatedUser),
+        status: order.status || null,
+        paymentStatus: order.paymentStatus || null,
+        totalAmount: order.totalAmount || 0,
+        shippingFee: order.shippingFee || 0,
+        currency: order.currency || 'INR',
+        stripeSessionId: order.stripeSessionId || null,
+        stripePaymentIntent: order.stripePaymentIntent || null,
+        customerName: order.customerName || null,
+        customerEmail: order.customerEmail || null,
+        customerPhone: order.customerPhone || null,
+        shippingAddress: order.shippingAddress || null,
+        cancellationReason: order.cancellationReason || null,
+        createdAt: order.createdAt || null,
+        updatedAt: order.updatedAt || null,
+        items: (order.items || []).map(itemToJSON),
+        statusHistory: sortByCreatedAtAsc(order.statusHistory || []).map(statusHistoryToJSON),
+        messages: sortByCreatedAtAsc(order.messages || []).map(messageToJSON)
+    };
+}
 
 // ======================= ADMIN AUTH =======================
 
@@ -1109,9 +1275,7 @@ app.post('/api/admin/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password are required.' });
         }
 
-        const admin = await prisma.admin.findUnique({
-            where: { email: String(email).trim().toLowerCase() }
-        });
+        const admin = await Admin.findOne({ email: String(email).trim().toLowerCase() });
 
         if (!admin) {
             return res.status(401).json({ error: 'Invalid email or password.' });
@@ -1128,7 +1292,7 @@ app.post('/api/admin/login', async (req, res) => {
 
         res.json({
             success: true,
-            admin: { id: admin.id, name: admin.name, email: admin.email }
+            admin: { id: admin._id.toString(), name: admin.name, email: admin.email }
         });
     } catch (error) {
         console.error('[Admin] Login failed:', error.message);
@@ -1155,40 +1319,53 @@ app.get('/api/admin/dashboard/stats', adminAuth.requireAdmin, async (req, res) =
         startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
 
         const [totalOrders, paidSum, recentOrders, totalsByStatus, todayAgg] = await Promise.all([
-            prisma.order.count(),
-            prisma.order.aggregate({ _sum: { totalAmount: true }, where: { paymentStatus: 'PAID' } }),
-            prisma.order.findMany({
-                orderBy: { createdAt: 'desc' },
-                take: 6,
-                select: {
-                    id: true,
-                    orderNumber: true,
-                    customerName: true,
-                    customerEmail: true,
-                    totalAmount: true,
-                    shippingFee: true,
-                    currency: true,
-                    status: true,
-                    paymentStatus: true,
-                    createdAt: true,
-                    items: { select: { name: true, quantity: true, price: true, image: true } }
-                }
-            }),
-            prisma.order.groupBy({ by: ['status'], _count: { _all: true } }),
-            prisma.order.aggregate({
-                _count: { _all: true },
-                _sum: { totalAmount: true },
-                where: {
-                    createdAt: { gte: startOfToday, lt: startOfTomorrow },
-                    paymentStatus: 'PAID'
-                }
-            })
+            Order.countDocuments(),
+            Order.aggregate([
+                { $match: { paymentStatus: 'PAID' } },
+                { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+            ]),
+            Order.find()
+                .sort({ createdAt: -1 })
+                .limit(6)
+                .lean(),
+            Order.aggregate([
+                { $group: { _id: '$status', count: { $sum: 1 } } }
+            ]),
+            Order.aggregate([
+                {
+                    $match: {
+                        createdAt: { $gte: startOfToday, $lt: startOfTomorrow },
+                        paymentStatus: 'PAID'
+                    }
+                },
+                { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$totalAmount' } } }
+            ])
         ]);
 
         const countsByStatus = {};
         totalsByStatus.forEach(row => {
-            countsByStatus[row.status] = row._count._all;
+            countsByStatus[row._id] = row.count;
         });
+
+        const recentOrderJSON = recentOrders.map(order => ({
+            id: toIdString(order._id),
+            orderNumber: order.orderNumber,
+            customerName: order.customerName,
+            customerEmail: order.customerEmail,
+            totalAmount: order.totalAmount,
+            shippingFee: order.shippingFee,
+            currency: order.currency,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+            createdAt: order.createdAt,
+            items: (order.items || []).map(item => ({
+                id: toIdString(item._id),
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                image: item.image
+            }))
+        }));
 
         res.json({
             totalOrders,
@@ -1198,10 +1375,10 @@ app.get('/api/admin/dashboard/stats', adminAuth.requireAdmin, async (req, res) =
             shippedOrders: countsByStatus.SHIPPED || 0,
             deliveredOrders: countsByStatus.DELIVERED || 0,
             cancelledOrders: countsByStatus.CANCELLED || 0,
-            totalRevenuePaise: paidSum._sum.totalAmount || 0,
-            todayOrders: todayAgg._count._all || 0,
-            todayRevenuePaise: todayAgg._sum.totalAmount || 0,
-            recentOrders
+            totalRevenuePaise: (paidSum[0] && paidSum[0].total) || 0,
+            todayOrders: (todayAgg[0] && todayAgg[0].count) || 0,
+            todayRevenuePaise: (todayAgg[0] && todayAgg[0].total) || 0,
+            recentOrders: recentOrderJSON
         });
     } catch (error) {
         handleDbError(res, error, 'Could not fetch dashboard statistics.');
@@ -1233,42 +1410,37 @@ app.get('/api/admin/orders', adminAuth.requireAdmin, async (req, res) => {
         }
 
         if (search && String(search).trim()) {
-            const term = String(search).trim();
-            where.OR = [
-                { orderNumber: { contains: term } },
-                { customerEmail: { contains: term, mode: 'insensitive' } },
-                { customerName: { contains: term, mode: 'insensitive' } },
-                { customerPhone: { contains: term } },
-                { stripeSessionId: { contains: term } }
+            const term = escapeRegExp(String(search).trim());
+            const pattern = new RegExp(term, 'i');
+            where.$or = [
+                { orderNumber: pattern },
+                { customerEmail: pattern },
+                { customerName: pattern },
+                { customerPhone: { $regex: escapeRegExp(String(search).trim()) } },
+                { stripeSessionId: pattern }
             ];
         }
 
         if (dateFrom || dateTo) {
             where.createdAt = {};
-            if (dateFrom) where.createdAt.gte = new Date(dateFrom);
-            if (dateTo) where.createdAt.lte = new Date(dateTo);
+            if (dateFrom) where.createdAt.$gte = new Date(dateFrom);
+            if (dateTo) where.createdAt.$lte = new Date(dateTo);
         }
 
-        const orderBy = sort === 'oldest'
-            ? { createdAt: 'asc' }
-            : { createdAt: 'desc' };
+        const sortOrder = sort === 'oldest' ? { createdAt: 1 } : { createdAt: -1 };
 
         const [orders, total] = await Promise.all([
-            prisma.order.findMany({
-                where,
-                include: {
-                    items: true,
-                    user: { select: { id: true, name: true, email: true } }
-                },
-                orderBy,
-                skip: (page - 1) * pageSize,
-                take: pageSize
-            }),
-            prisma.order.count({ where })
+            Order.find(where)
+                .populate('userId', '_id name email')
+                .sort(sortOrder)
+                .skip((page - 1) * pageSize)
+                .limit(pageSize)
+                .lean(),
+            Order.countDocuments(where)
         ]);
 
         res.json({
-            orders,
+            orders: orders.map(orderToJSON),
             pagination: {
                 page,
                 pageSize,
@@ -1283,24 +1455,16 @@ app.get('/api/admin/orders', adminAuth.requireAdmin, async (req, res) => {
 
 app.get('/api/admin/orders/:id', adminAuth.requireAdmin, async (req, res) => {
     try {
-        const order = await prisma.order.findUnique({
-            where: { id: req.params.id },
-            include: {
-                items: true,
-                user: { select: { id: true, name: true, email: true } },
-                statusHistory: { orderBy: { createdAt: 'asc' } },
-                messages: {
-                    orderBy: { createdAt: 'asc' },
-                    include: { admin: { select: { id: true, name: true, email: true } } }
-                }
-            }
-        });
+        const order = await Order.findById(toObjectIdOrNull(req.params.id))
+            .populate('userId', '_id name email')
+            .populate('messages.adminId', '_id name email')
+            .lean();
 
         if (!order) {
             return res.status(404).json({ error: 'Order not found.' });
         }
 
-        res.json(order);
+        res.json(orderToJSON(order));
     } catch (error) {
         handleDbError(res, error, 'Could not fetch order.');
     }
@@ -1324,24 +1488,83 @@ app.post('/api/admin/orders/:id/messages', adminAuth.requireAdmin, async (req, r
             return res.status(400).json({ error: 'Message cannot be empty.' });
         }
 
-        const order = await prisma.order.findUnique({ where: { id: req.params.id } });
+        const order = await Order.findById(toObjectIdOrNull(req.params.id));
 
         if (!order) {
             return res.status(404).json({ error: 'Order not found.' });
         }
 
-        const created = await prisma.orderMessage.create({
-            data: {
-                orderId: order.id,
-                adminId: req.admin.sub,
-                message: text
-            },
-            include: { admin: { select: { id: true, name: true } } }
+        order.messages.push({
+            adminId: toObjectIdOrNull(req.admin.sub),
+            message: text
         });
 
-        res.status(201).json(created);
+        await order.save();
+
+        const created = order.messages[order.messages.length - 1];
+
+        res.status(201).json(messageToJSON(created.toObject()));
     } catch (error) {
         handleDbError(res, error, 'Could not send message.');
+    }
+});
+
+// ======================= PRODUCTS API (CUSTOMER-FACING) =======================
+
+app.get('/api/products', async (req, res) => {
+    try {
+        const { category, search, limit } = req.query;
+        const where = {};
+
+        if (category && String(category).trim()) {
+            where.category = String(category).trim();
+        }
+
+        if (search && String(search).trim()) {
+            const term = escapeRegExp(String(search).trim());
+            where.$or = [
+                { name: { $regex: term, $options: 'i' } },
+                { description: { $regex: term, $options: 'i' } },
+                { category: { $regex: term, $options: 'i' } }
+            ];
+        }
+
+        const parsedLimit = parseInt(limit, 10);
+
+        const products = await Product.find(where)
+            .sort({ createdAt: 1, name: 1 })
+            .limit(Number.isInteger(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 100000);
+
+        // Temporary diagnostic logging: confirms which database/collection the
+        // API actually reads from and how many products are returned.
+        console.log(
+            `[Products] db=${mongoose.connection.name} collection=${Product.collection.name} ` +
+            `total_returned=${products.length} category=${category || 'ALL'}`
+        );
+
+        res.json({ products });
+    } catch (error) {
+        handleDbError(res, error, 'Could not fetch products.');
+    }
+});
+
+app.get('/api/products/:id', async (req, res) => {
+    try {
+        const param = req.params.id;
+        const product = await Product.findOne({
+            $or: [
+                ...(toObjectIdOrNull(param) ? [{ _id: toObjectIdOrNull(param) }] : []),
+                { slug: param }
+            ]
+        });
+
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found.' });
+        }
+
+        res.json({ product });
+    } catch (error) {
+        handleDbError(res, error, 'Could not fetch product.');
     }
 });
 
@@ -1360,26 +1583,25 @@ app.get('/api/admin/products', adminAuth.requireAdmin, async (req, res) => {
         }
 
         if (search && String(search).trim()) {
-            const term = String(search).trim();
-            where.OR = [
-                { name: { contains: term, mode: 'insensitive' } },
-                { description: { contains: term, mode: 'insensitive' } },
-                { category: { contains: term, mode: 'insensitive' } }
+            const pattern = new RegExp(escapeRegExp(String(search).trim()), 'i');
+            where.$or = [
+                { name: pattern },
+                { description: pattern },
+                { category: pattern }
             ];
         }
 
         const [products, total] = await Promise.all([
-            prisma.product.findMany({
-                where,
-                orderBy: [{ createdAt: 'asc' }, { name: 'asc' }],
-                skip: (page - 1) * pageSize,
-                take: pageSize
-            }),
-            prisma.product.count({ where })
+            Product.find(where)
+                .sort({ createdAt: 1, name: 1 })
+                .skip((page - 1) * pageSize)
+                .limit(pageSize)
+                .lean(),
+            Product.countDocuments(where)
         ]);
 
         res.json({
-            products,
+            products: products.map(product => ({ ...product, id: toIdString(product._id) })),
             pagination: {
                 page,
                 pageSize,
@@ -1409,7 +1631,7 @@ app.get('/api/admin/products/images', adminAuth.requireAdmin, async (req, res) =
 // Upload a new product image into the existing public images directory.
 // The raw PNG/JPG/WEBP bytes are validated (magic bytes + size), written with
 // a unique filename, and only the relative path is stored in the database —
-// no binary data is ever persisted in MySQL.
+// no binary data is ever persisted in MongoDB.
 app.post(
     '/api/admin/products/images/upload',
     adminAuth.requireAdmin,
@@ -1464,11 +1686,9 @@ app.post('/api/admin/products', adminAuth.requireAdmin, async (req, res) => {
 
         const slug = await uniqueProductSlug(validated.data.name);
 
-        const product = await prisma.product.create({
-            data: { ...validated.data, slug }
-        });
+        const product = await Product.create({ ...validated.data, slug });
 
-        res.status(201).json({ product });
+        res.status(201).json({ product: { ...product.toObject(), id: toIdString(product._id) } });
     } catch (error) {
         handleDbError(res, error, 'Could not create product.');
     }
@@ -1476,7 +1696,8 @@ app.post('/api/admin/products', adminAuth.requireAdmin, async (req, res) => {
 
 app.patch('/api/admin/products/:id', adminAuth.requireAdmin, async (req, res) => {
     try {
-        const existing = await prisma.product.findUnique({ where: { id: req.params.id } });
+        const existingId = toObjectIdOrNull(req.params.id);
+        const existing = existingId ? await Product.findById(existingId) : null;
 
         if (!existing) {
             return res.status(404).json({ error: 'Product not found.' });
@@ -1488,12 +1709,13 @@ app.patch('/api/admin/products/:id', adminAuth.requireAdmin, async (req, res) =>
             return res.status(400).json({ error: validated.error });
         }
 
-        const product = await prisma.product.update({
-            where: { id: existing.id },
-            data: validated.data
+        Object.keys(validated.data).forEach(key => {
+            existing[key] = validated.data[key];
         });
 
-        res.json({ product });
+        await existing.save();
+
+        res.json({ product: { ...existing.toObject(), id: toIdString(existing._id) } });
     } catch (error) {
         handleDbError(res, error, 'Could not update product.');
     }
@@ -1501,21 +1723,30 @@ app.patch('/api/admin/products/:id', adminAuth.requireAdmin, async (req, res) =>
 
 app.delete('/api/admin/products/:id', adminAuth.requireAdmin, async (req, res) => {
     try {
-        const existing = await prisma.product.findUnique({ where: { id: req.params.id } });
+        const existingId = toObjectIdOrNull(req.params.id);
+        const existing = existingId ? await Product.findById(existingId) : null;
 
         if (!existing) {
             return res.status(404).json({ error: 'Product not found.' });
         }
 
-        const linkedOrderItems = await prisma.orderItem.count({ where: { productId: existing.id } });
+        const linkedOrderItems = await Order.countDocuments({ 'items.productId': existing._id });
 
         /*
-          Existing orders are never lost: OrderItem keeps a snapshot of the
-          product (name, price, quantity, image) and its productId foreign key
-          is ON DELETE SET NULL. Deleting a product therefore only unlinks the
-          historical order rows; history stays fully intact.
+          Existing orders are never lost: Order items keeps a snapshot of the
+          product (name, price, quantity, image) and its productId reference
+          is unset (the old ON DELETE SET NULL behaviour). Deleting a product
+          therefore only unlinks the historical order rows; history stays
+          fully intact.
         */
-        await prisma.product.delete({ where: { id: existing.id } });
+        await Product.deleteOne({ _id: existing._id });
+
+        if (linkedOrderItems > 0) {
+            await Order.updateMany(
+                { 'items.productId': existing._id },
+                { $set: { 'items.$[].productId': null } }
+            );
+        }
 
         // Image cleanup is conservative: the file is removed only when nothing
         // else references it (no other product and no historical order item).
@@ -1528,8 +1759,8 @@ app.delete('/api/admin/products/:id', adminAuth.requireAdmin, async (req, res) =
 
             if (fs.existsSync(fullPath)) {
                 const [otherProducts, referencingOrderItems] = await Promise.all([
-                    prisma.product.count({ where: { image, id: { not: existing.id } } }),
-                    prisma.orderItem.count({ where: { image } })
+                    Product.countDocuments({ image, _id: { $ne: existing._id } }),
+                    Order.countDocuments({ 'items.image': image })
                 ]);
 
                 if (otherProducts === 0 && referencingOrderItems === 0) {
@@ -1545,7 +1776,7 @@ app.delete('/api/admin/products/:id', adminAuth.requireAdmin, async (req, res) =
 
         res.json({
             success: true,
-            deleted: existing.id,
+            deleted: toIdString(existing._id),
             linkedOrderItems,
             imageDeleted,
             imageCleanupMessage,
@@ -1572,24 +1803,20 @@ app.post('/api/customers', async (req, res) => {
         const phone = String(req.body.phone || '').trim() || null;
         const shippingAddress = normalizeSavedAddress(req.body.shippingAddress);
 
-        const customer = await prisma.user.upsert({
-            where: { email },
-            update: {
-                name: name || undefined,
-                phone: phone || undefined,
-                shippingAddress: shippingAddress || undefined
-            },
-            create: {
-                email,
-                name,
-                phone,
-                shippingAddress
-            }
-        });
+        const updateFields = {};
+        if (name) updateFields.name = name;
+        if (phone) updateFields.phone = phone;
+        if (shippingAddress) updateFields.shippingAddress = shippingAddress;
+
+        const customer = await User.findOneAndUpdate(
+            { email },
+            { $set: updateFields, $setOnInsert: { email } },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
 
         res.json({
             customer: {
-                id: customer.id,
+                id: customer._id.toString(),
                 email: customer.email,
                 name: customer.name,
                 phone: customer.phone,
@@ -1609,7 +1836,7 @@ app.get('/api/customers/:email', async (req, res) => {
             return res.status(400).json({ error: 'A valid email is required.' });
         }
 
-        const customer = await prisma.user.findUnique({ where: { email } });
+        const customer = await User.findOne({ email });
 
         if (!customer) {
             return res.json({ customer: null });
@@ -1617,7 +1844,7 @@ app.get('/api/customers/:email', async (req, res) => {
 
         res.json({
             customer: {
-                id: customer.id,
+                id: customer._id.toString(),
                 email: customer.email,
                 name: customer.name,
                 phone: customer.phone,
@@ -1650,22 +1877,48 @@ app.get('/success', (req, res) => {
 
 const stripeVersion = require('./node_modules/stripe/package.json').version;
 const stripeKeyMode = (process.env.STRIPE_SECRET_KEY || '').startsWith('sk_live_') ? 'LIVE MODE - REAL CHARGES!' : 'TEST (sandbox) mode';
+const stripePkMode = (process.env.STRIPE_PUBLISHABLE_KEY || '').startsWith('pk_live_') ? 'LIVE' : 'TEST';
 
-app.listen(PORT, () => {
-    console.log(`RARE HABIT server running at http://localhost:${PORT}`);
-    console.log(`[Stripe] SDK v${stripeVersion} | key: ${stripeKeyMode}`);
+// Start the HTTP server only when this file is run directly (node app.js).
+// When Vercel imports the app (via api/index.js) for its serverless functions,
+// the exported Express app is used instead and listen() must not run.
+//
+// The server only starts listening after MongoDB connects, so the site never
+// serves products against a dead database: a failed connection fails fast.
+async function startServer() {
+    try {
+        await connectDB();
+        console.log('[MongoDB] Connected before starting the HTTP server.');
+    } catch (error) {
+        console.error(`[MongoDB] Initial connection failed: ${safeErrorText(error)}`);
+        console.error('The server will not start until MongoDB is reachable.');
+        console.error('Fix MONGODB_URI in the .env file (and check the Atlas IP allowlist), then restart. TLS remains enabled.');
+        process.exit(1);
+    }
 
-    stripe.balance.retrieve()
-        .then(bal => {
-            const entries = [...bal.available, ...bal.pending];
-            const summary = entries.length
-                ? entries.map(e => `${(e.amount / 100).toFixed(2)} ${e.currency.toUpperCase()}`).join(', ')
-                : 'no balances yet';
-            console.log(`[Stripe] current balance: ${summary}`);
-        })
-        .catch(err => console.warn(`[Stripe] Could not fetch balance: ${err.message}`));
+    app.listen(PORT, () => {
+        console.log(`RARE HABIT server running at http://localhost:${PORT}`);
+        console.log(`[Stripe] SDK v${stripeVersion} | secret key: ${stripeKeyMode}`);
+        console.log(`[Stripe] publishable key: ${stripePkMode} mode`);
 
-    stripe.account.retrieve()
-        .then(account => console.log(`[Stripe] account: ${account.id} | country=${account.country} | default currency=${account.default_currency}`))
-        .catch(err => console.warn(`[Stripe] Could not fetch account: ${err.message}`));
-});
+        stripe.balance.retrieve()
+            .then(bal => {
+                const entries = [...bal.available, ...bal.pending];
+                const summary = entries.length
+                    ? entries.map(e => `${(e.amount / 100).toFixed(2)} ${e.currency.toUpperCase()}`).join(', ')
+                    : 'no balances yet';
+                console.log(`[Stripe] current balance: ${summary}`);
+            })
+            .catch(err => console.warn(`[Stripe] Could not fetch balance: ${err.message}`));
+
+        stripe.account.retrieve()
+            .then(account => console.log(`[Stripe] account: ${account.id} | country=${account.country} | default currency=${account.default_currency}`))
+            .catch(err => console.warn(`[Stripe] Could not fetch account: ${err.message}`));
+    });
+}
+
+if (require.main === module) {
+    startServer();
+}
+
+module.exports = app;
