@@ -670,6 +670,22 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
 
 app.use(express.json());
 
+// Confirms MongoDB is connected before any database-backed /api route runs.
+// Locally this is already true (app.listen() is gated on a successful
+// connect), but on Vercel the app is imported by api/index.js and each request
+// may hit a brand-new process, so a cold invocation must establish the Mongoose
+// connection on demand instead of assuming it is already up.
+async function ensureDb(req, res, next) {
+    try {
+        await connectDB();
+        next();
+    } catch (error) {
+        handleDbError(res, error, 'The database is currently unreachable.');
+    }
+}
+
+app.use('/api', ensureDb);
+
 // Protect every /admin/* page (except login and static assets) — must run before express.static
 app.use('/admin', adminAuth.requireAdminPage);
 app.use(express.static(path.join(__dirname, 'public')));
@@ -1919,6 +1935,14 @@ async function startServer() {
 
 if (require.main === module) {
     startServer();
+} else {
+    // Vercel serverless: app.listen() never runs (api/index.js imports this
+    // file), so begin the MongoDB connection immediately. Mongoose buffers
+    // model operations while the connection is establishing, so the first
+    // database request on a cold start is served as soon as it is ready.
+    connectDB().catch(error => {
+        console.error(`[MongoDB] Serverless background connect failed: ${safeErrorText(error)}`);
+    });
 }
 
 module.exports = app;
